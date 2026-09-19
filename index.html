@@ -331,8 +331,9 @@
       } else if (viewName === 'ranking') {
         RankingView.render(viewArea, this.rankingSubway, this.dataAdmin); 
       } else if (viewName === 'weighting') {
-        // ここを修正：重みづけにはシート2（rankingSubway）を渡す
         WeightingView.render(viewArea, this.rankingSubway, this.dataAdmin);
+      } else if (viewName === 'other') {
+        OtherView.render(viewArea);
       } else {
         viewArea.innerHTML = `<div style="text-align:center; padding:40px;">「${viewName}」は準備中です</div>`;
       }
@@ -731,15 +732,18 @@
   };
 
   // ==========================================
-  // 4. 重みづけ調査ビュー (WeightingView) - シート2対応版
+  // 4. 重みづけ調査ビュー (WeightingView)
   // ==========================================
   const WeightingView = {
     currentMode: '商圏',
-    JAPAN_POPULATION: 126146099, // 人口基準値
+    JAPAN_POPULATION: 126146099, 
+    citiesSubway: [],
+    prefsAdmin: [],
 
     render(container, rankingSubway, dataAdmin) {
-      this.rankingSubway = rankingSubway; // シート2のデータを使用
+      this.rankingSubway = rankingSubway; 
       this.dataAdmin = dataAdmin;
+      this.buildSelections();
       
       container.innerHTML = `
         <div class="sub-tabs">
@@ -769,14 +773,77 @@
       this.renderForm();
     },
 
+    buildSelections() {
+      // 商圏都市の抽出
+      const citySet = new Set();
+      this.rankingSubway.rows.forEach(row => {
+        if (!row[0]) return;
+        const operator = row[1] || '';
+        let city = 'その他';
+        if (operator.includes('札幌')) city = '札幌';
+        else if (operator.includes('東京メトロ') || operator.includes('営団')) city = '東京メトロ';
+        else if (operator.includes('都営')) city = '都営地下鉄';
+        else if (operator.includes('大阪')) city = '大阪';
+        else city = operator;
+        citySet.add(city);
+      });
+      const CITY_ORDER = ['札幌', '仙台', '東京メトロ', '都営地下鉄', '横浜', '名古屋', '京都', '大阪', '神戸', '福岡'];
+      this.citiesSubway = Array.from(citySet).sort((a, b) => {
+        let iA = CITY_ORDER.indexOf(a), iB = CITY_ORDER.indexOf(b);
+        return (iA === -1 ? 999 : iA) - (iB === -1 ? 999 : iB);
+      });
+
+      // 行政都道府県の抽出
+      const prefSet = new Set();
+      this.dataAdmin.rows.forEach(row => {
+        const name = row[0];
+        if (!name) return;
+        const prefEndIndex = Math.max(name.indexOf('都'), name.indexOf('道'), name.indexOf('府'), name.indexOf('県'));
+        if (prefEndIndex > 0 && prefEndIndex < 4) {
+          prefSet.add(name.substring(0, prefEndIndex + 1));
+        }
+      });
+      this.prefsAdmin = Array.from(prefSet);
+    },
+
     renderForm() {
       const formArea = document.getElementById('weighting-form-area');
       const data = this.currentMode === '商圏' ? this.rankingSubway : this.dataAdmin;
-      
-      // 商圏（シート2）の場合は2列目(インデックス1)からデータ開始、行政区は3列目(インデックス2)から
       const startCol = this.currentMode === '商圏' ? 1 : 2;
 
-      let html = `<div class="step-card" style="padding:10px 15px;"><div style="max-height: 50vh; overflow-y:auto; padding-right:5px;">`;
+      let html = '';
+      if (this.currentMode === '商圏') {
+        html += `
+          <div class="step-card">
+            <div class="step-title">1. 対象の都市を選ぶ</div>
+            <select id="weighting-target-select">
+              <option value="全国">全国 (すべて)</option>
+              ${this.citiesSubway.map(c => `<option value="${c}">${c}</option>`).join('')}
+            </select>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="step-card">
+            <div class="step-title">1. 表示する区分を選ぶ</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; font-size: 0.9rem;">
+              <label><input type="checkbox" name="weighting_admin_type" value="pref" checked> 都道府県</label>
+              <label><input type="checkbox" name="weighting_admin_type" value="special_ward" checked> 特別区(東京23区)</label>
+              <label><input type="checkbox" name="weighting_admin_type" value="ward" checked> 行政区(政令市)</label>
+              <label><input type="checkbox" name="weighting_admin_type" value="city" checked> 市</label>
+              <label><input type="checkbox" name="weighting_admin_type" value="town" checked> 町</label>
+              <label><input type="checkbox" name="weighting_admin_type" value="village" checked> 村</label>
+            </div>
+            <div class="step-title">2. 対象の都道府県を選ぶ</div>
+            <select id="weighting-target-select">
+              <option value="全国">全国 (すべて)</option>
+              ${this.prefsAdmin.map(p => `<option value="${p}">${p}</option>`).join('')}
+            </select>
+          </div>
+        `;
+      }
+
+      html += `<div class="step-card"><div class="step-title">3. 点数を入力 (0-100)</div><div style="max-height: 40vh; overflow-y:auto; padding-right:5px;">`;
       for (let i = startCol; i < data.headers.length; i++) {
         if (!data.headers[i]) continue;
         html += `
@@ -810,14 +877,22 @@
         return;
       }
 
-      // 各項目の「全国合計値」の取得
+      // 絞り込み条件の取得
+      const targetArea = document.getElementById('weighting-target-select').value;
+      const checkedTypes = this.currentMode === '行政' ? Array.from(document.querySelectorAll('input[name="weighting_admin_type"]:checked')).map(cb => cb.value) : [];
+
+      if (this.currentMode === '行政' && checkedTypes.length === 0) {
+        alert('区分を1つ以上選択してください。');
+        return;
+      }
+
+      // 全国の合計値を計算（母数は絞り込み前に計算する）
       let colSums = {};
       for (const col in weights) {
         const headerName = data.headers[col];
         if (nationalTotals[headerName] !== undefined) {
           colSums[col] = nationalTotals[headerName];
         } else {
-          // 事前定義がない項目は、CSVの縦列を動的合算して全体母数とする
           let sum = 0;
           data.rows.forEach(row => { sum += parseFloat((row[col] || '0').replace(/,/g, '')) || 0; });
           colSums[col] = sum;
@@ -826,9 +901,44 @@
 
       let results = [];
       const nameColIndex = 0; 
-      let validRows = data.rows.filter(r => r[nameColIndex]);
+      
+      data.rows.forEach(row => {
+        const name = row[nameColIndex];
+        if (!name) return;
 
-      validRows.forEach(row => {
+        // 地域によるフィルタリング
+        if (this.currentMode === '商圏') {
+          if (targetArea !== '全国') {
+            const operator = row[1] || '';
+            let city = 'その他';
+            if (operator.includes('札幌')) city = '札幌';
+            else if (operator.includes('東京メトロ') || operator.includes('営団')) city = '東京メトロ';
+            else if (operator.includes('都営')) city = '都営地下鉄';
+            else if (operator.includes('大阪')) city = '大阪';
+            else city = operator;
+            if (city !== targetArea) return; // フィルタ除外
+          }
+        } else {
+          let type = '';
+          if ((name.endsWith('都') || name.endsWith('道') || name.endsWith('府') || name.endsWith('県')) && !(name.endsWith('市') || name.endsWith('区') || name.endsWith('町') || name.endsWith('村'))) type = 'pref';
+          else if (name.startsWith('東京都') && name.endsWith('区')) type = 'special_ward';
+          else if (name.includes('市') && name.endsWith('区')) type = 'ward';
+          else if (name.endsWith('市')) type = 'city';
+          else if (name.endsWith('町')) type = 'town';
+          else if (name.endsWith('村')) type = 'village';
+          else type = 'other';
+          
+          if (!checkedTypes.includes(type)) return; // 区分フィルタ除外
+
+          if (targetArea !== '全国') {
+            let pref = 'その他';
+            const prefEndIndex = Math.max(name.indexOf('都'), name.indexOf('道'), name.indexOf('府'), name.indexOf('県'));
+            if (prefEndIndex > 0 && prefEndIndex < 4) pref = name.substring(0, prefEndIndex + 1);
+            if (pref !== targetArea) return; // 都道府県フィルタ除外
+          }
+        }
+
+        // スコア計算
         let rawScore = 0;
         for (const col in weights) {
           if (colSums[col] > 0) {
@@ -838,7 +948,7 @@
         }
         
         let adjustedScore = rawScore * (this.JAPAN_POPULATION / totalWeight);
-        let cleanName = row[nameColIndex];
+        let cleanName = name;
         if (this.currentMode === '商圏') cleanName = cleanName.replace(/-0\.5km$/, '');
         
         results.push({ name: cleanName, score: Math.round(adjustedScore) });
@@ -861,20 +971,58 @@
             </thead>
             <tbody>
       `;
-      top50.forEach((item, index) => {
-        html += `<tr>
-            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${index + 1}</td>
-            <td style="padding:10px 8px; border-bottom:1px solid #eee;">${item.name}</td>
-            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right; font-weight:bold; color:#007aff;">
-              ${item.score.toLocaleString()}
-            </td>
-          </tr>`;
-      });
+      if (top50.length === 0) {
+        html += '<tr><td colspan="3" style="text-align:center; padding: 15px;">該当するデータがありません</td></tr>';
+      } else {
+        top50.forEach((item, index) => {
+          html += `<tr>
+              <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${index + 1}</td>
+              <td style="padding:10px 8px; border-bottom:1px solid #eee;">${item.name}</td>
+              <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right; font-weight:bold; color:#007aff;">
+                ${item.score.toLocaleString()}
+              </td>
+            </tr>`;
+        });
+      }
       html += `</tbody></table></div>`;
       
       const resultArea = document.getElementById('weighting-result-area');
       resultArea.innerHTML = html;
       resultArea.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // ==========================================
+  // 5. その他ビュー (OtherView) - 新規追加
+  // ==========================================
+  const OtherView = {
+    render(container) {
+      container.innerHTML = `
+        <div class="step-card">
+          <h3 style="margin-top:0; border-bottom:2px solid #ccc; padding-bottom:5px;">出典</h3>
+          <h4 style="margin-bottom:5px; color:#333;">【行政データ】</h4>
+          <ul style="font-size:0.85rem; padding-left:20px; color:#555; margin-top:0;">
+            <li style="margin-bottom:4px;"><strong>人口、昼間人口:</strong> 国勢調査2020年</li>
+            <li style="margin-bottom:4px;"><strong>事業所数、従業者数:</strong> 経済センサス基礎調査2021年</li>
+            <li style="margin-bottom:4px;"><strong>企業数、企業付加価値額、小売店数、飲食店数、小売業売り場面積:</strong> 経済センサス－活動調査2021年</li>
+            <li style="margin-bottom:4px;"><strong>小売業および卸売業年間商品販売額:</strong> 経済センサス活動調査2020年</li>
+          </ul>
+          <h4 style="margin-bottom:5px; margin-top:20px; color:#333;">【商圏データ】</h4>
+          <ul style="font-size:0.85rem; padding-left:20px; color:#555; margin-top:0;">
+            <li style="margin-bottom:4px;"><strong>人口:</strong> 国勢調査2020年</li>
+            <li style="margin-bottom:4px;"><strong>事業所数（各産業）、従業者数（各産業）:</strong> 経済センサス活動調査2021年</li>
+            <li style="margin-bottom:4px;"><strong>小売業販売額:</strong> 商業統計調査2014年</li>
+            <li style="margin-bottom:4px;"><strong>滞在人口:</strong> 全国の滞在人口（人流）オープンデータ（国土交通省）2019年5月</li>
+          </ul>
+        </div>
+        <div class="step-card">
+          <h3 style="margin-top:0; border-bottom:2px solid #ccc; padding-bottom:5px;">利用規約</h3>
+          <p style="font-size:0.85rem; color:#555; line-height:1.6;">
+            本システムは、各オープンデータ等をもとに算出したシミュレーション結果を提供するものです。提供するデータおよび計算結果の正確性、完全性、最新性についてはいかなる保証も行うものではありません。<br><br>
+            本システムを利用したことによって生じたいかなる損害についても、提供者は一切の責任を負いません。データのご利用は利用者ご自身の判断と責任において行ってください。
+          </p>
+        </div>
+      `;
     }
   };
 
