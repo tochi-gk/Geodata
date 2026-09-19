@@ -379,12 +379,12 @@
 
     buildSubwayTree(rows) {
       this.treeSubway = {};
-      const CITY_ORDER = ['札幌', '仙台', '東京メトロ', '都営地下鉄', '横浜', '名古屋', '京都', '大阪', '神戸', '福岡'];
+      const CITY_ORDER = ['札幌市営地下鉄', '仙台', '東京メトロ', '都営地下鉄', '横浜', '名古屋', '京都', '大阪', '神戸', '福岡'];
       rows.forEach(row => {
         const station = row[0], operator = row[1], line = row[2] || 'その他';
         if (!station) return;
         let city = 'その他';
-        if (operator.includes('札幌')) city = '札幌';
+        if (operator.includes('札幌市営地下鉄')) city = '札幌市営地下鉄';
         else if (operator.includes('東京メトロ') || operator.includes('営団')) city = '東京メトロ';
         else if (operator.includes('都営')) city = '都営地下鉄';
         else if (operator.includes('大阪')) city = '大阪';
