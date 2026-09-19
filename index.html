@@ -230,11 +230,35 @@
 </nav>
 
 <script>
+  // 全国合計値の設定（計算基準用）
+  const NATIONAL_TOTALS_ADMIN = {
+    "人口": 126146099, "昼間人口": 126146099, "GRP": 5740408.00,
+    "企業付加価値額": 336259516, "事業所数": 5156063, "従業者数": 57949915,
+    "企業数": 3684049, "卸売年商": 412558026, "小売年商": 139398373,
+    "小売店数": 872699, "飲食店数": 496217, "売り場面積": 38137
+  };
+
+  const NATIONAL_TOTALS_SUBWAY = {
+    "従業者数-Ａ～Ｓ全産業": 14058859, "事業所数-Ａ～Ｓ全産業": 779943,
+    "小売業販売額": 2250665, "商業従業者数": 2839870,
+    "宿泊・飲食サービス業従業者数": 1169069, "事業所数- Ｍ宿泊業，飲食サービス業": 117337,
+    "情報通信業従業者数": 1591576, "金融保険業従業者数": 891261,
+    "運輸・郵便業従業者数": 366829, "不動産・物品賃貸業従業者数": 622238,
+    "教育，学習支援業従業者数": 390281, "学術・専門サービス業従業者数": 1052387,
+    "医療福祉業従業者数": 815056, "インフラ業従業者数": 90033,
+    "製造業従業者数": 536086, "建設業従業者数": 558240,
+    "娯楽業生活関連サービス業従業者数": 419660, "複合サービス事業従業者数": 35505,
+    "サービス業従業者数": 2207828, "公務従業者数": 467832,
+    "人口（総数）": 6573997, "平日昼滞留人口": 20061100,
+    "平日夜滞留人口": 8540438, "休日昼滞留人口": 11363226,
+    "休日夜滞留人口": 7959851, "20平均地価": 10865278,
+    "地価上昇率": 5201.49
+  };
+
   // ==========================================
   // 1. システム中核 (AppCore)
   // ==========================================
   const AppCore = {
-    // URL群 (データ用、ランキング用、行政区用)
     URL_SUBWAY_DATA: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWIvVKpVGibqTl0uL0cv4IfZVEPxEiiSbakzEVLGGcO2kjvp3Uyc_K5f_h6K-VzeVfkQFSb1z9jdJM/pub?gid=0&single=true&output=csv',
     URL_SUBWAY_RANKING: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWIvVKpVGibqTl0uL0cv4IfZVEPxEiiSbakzEVLGGcO2kjvp3Uyc_K5f_h6K-VzeVfkQFSb1z9jdJM/pub?gid=1551612660&single=true&output=csv',
     URL_ADMIN: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT0aD_hVGXuEgScPe4fdO0SinUYsPwog2CLiefIdZosotReUGLWpiKx8Dw3upfTD-sherpYef-GV9Sy/pub?gid=335081747&single=true&output=csv',
@@ -250,9 +274,7 @@
           fetch(this.URL_SUBWAY_RANKING),
           fetch(this.URL_ADMIN)
         ]);
-
         if (!resSubData.ok || !resSubRank.ok || !resAdmin.ok) throw new Error(`HTTP Error during fetch`);
-
         this.dataSubway = this.parseCSV(await resSubData.text());
         this.rankingSubway = this.parseCSV(await resSubRank.text());
         this.dataAdmin = this.parseCSV(await resAdmin.text());
@@ -262,7 +284,6 @@
         this.switchMainView('data'); 
       } catch (e) {
         document.getElementById('view-area').innerHTML = `<div style="color:red;text-align:center;padding:20px;">読み込みに失敗しました。<br>${e.message}</div>`;
-        console.error(e);
       }
     },
 
@@ -324,13 +345,10 @@
     currentMode: '商圏', 
     treeSubway: {}, treeAdmin: {},
     citiesSubway: [], prefsAdmin: [],
-    rawSubway: null, rawAdmin: null,
     selectedSubway: new Set(), selectedAdmin: new Set(),
 
     render(container, dataSubway, dataAdmin) {
-      this.rawSubway = dataSubway;
-      this.rawAdmin = dataAdmin;
-      
+      this.rawSubway = dataSubway; this.rawAdmin = dataAdmin;
       this.buildSubwayTree(dataSubway.rows);
       this.buildAdminTree(dataAdmin.rows);
       
@@ -397,12 +415,14 @@
       this.prefsAdmin = Object.keys(this.treeAdmin);
     },
 
+    // バグ修正: innerHTML破壊によるアコーディオン不具合の修正
     renderForm() {
       const formArea = document.getElementById('search-form-area');
       const count = this.currentMode === '商圏' ? this.selectedSubway.size : this.selectedAdmin.size;
+      let html = '';
 
       if (this.currentMode === '商圏') {
-        formArea.innerHTML = `
+        html = `
           <div class="step-card">
             <div class="step-title">1. 対象の都市 (複数選択可)</div>
             <select id="select-target"></select>
@@ -412,12 +432,8 @@
             <div id="selection-list"></div>
           </div>
         `;
-        const selectBox = document.getElementById('select-target');
-        this.citiesSubway.forEach(city => selectBox.innerHTML += `<option value="${city}">${city}</option>`);
-        selectBox.addEventListener('change', (e) => this.renderSubwayList(e.target.value));
-        if (this.citiesSubway.length > 0) this.renderSubwayList(this.citiesSubway[0]);
       } else {
-        formArea.innerHTML = `
+        html = `
           <div class="step-card">
             <div class="step-title">1. 対象の都道府県 (複数選択可)</div>
             <select id="select-target"></select>
@@ -427,19 +443,37 @@
             <div id="selection-list"></div>
           </div>
         `;
-        const selectBox = document.getElementById('select-target');
-        this.prefsAdmin.forEach(pref => selectBox.innerHTML += `<option value="${pref}">${pref}</option>`);
-        selectBox.addEventListener('change', (e) => this.renderAdminList(e.target.value));
-        if (this.prefsAdmin.length > 0) this.renderAdminList(this.prefsAdmin[0]);
       }
-
-      formArea.innerHTML += `
+      
+      html += `
         <div style="text-align:center; margin-bottom:15px; font-size:0.95rem;">
           選択中: <strong id="selected-count" style="color:#007aff; font-size:1.1rem;">${count}</strong> 件
           <button class="clear-btn" id="clear-btn">クリア</button>
         </div>
         <button class="search-btn" id="search-btn">比較表を作成する</button>
       `;
+      
+      // HTMLを一度に流し込んだあとでDOMイベントを登録する（イベント消失防止）
+      formArea.innerHTML = html;
+
+      const selectBox = document.getElementById('select-target');
+      if (this.currentMode === '商圏') {
+        this.citiesSubway.forEach(city => {
+          const opt = document.createElement('option');
+          opt.value = city; opt.textContent = city;
+          selectBox.appendChild(opt);
+        });
+        selectBox.addEventListener('change', (e) => this.renderSubwayList(e.target.value));
+        if (this.citiesSubway.length > 0) this.renderSubwayList(this.citiesSubway[0]);
+      } else {
+        this.prefsAdmin.forEach(pref => {
+          const opt = document.createElement('option');
+          opt.value = pref; opt.textContent = pref;
+          selectBox.appendChild(opt);
+        });
+        selectBox.addEventListener('change', (e) => this.renderAdminList(e.target.value));
+        if (this.prefsAdmin.length > 0) this.renderAdminList(this.prefsAdmin[0]);
+      }
 
       document.getElementById('search-btn').addEventListener('click', () => this.renderResults());
       document.getElementById('clear-btn').addEventListener('click', () => {
@@ -526,29 +560,24 @@
         resultArea.innerHTML = '<div style="padding:15px; color:red; text-align:center;">比較する項目を選択してください</div>';
         return;
       }
-      
       let selectedData = [], headers = [], startCol = 0;
       if (this.currentMode === '商圏') {
-        headers = this.rawSubway.headers;
-        startCol = 3; 
+        headers = this.rawSubway.headers; startCol = 3; 
         selectedValues.forEach(val => {
           const rowData = this.rawSubway.rows.find(r => r[0] === val);
           if (rowData) selectedData.push({ cleanName: val.replace(/-0\.5km$/, ''), rowData });
         });
       } else {
-        headers = this.rawAdmin.headers;
-        startCol = 2; 
+        headers = this.rawAdmin.headers; startCol = 2; 
         selectedValues.forEach(indexStr => {
           const rowData = this.rawAdmin.rows[parseInt(indexStr, 10)];
           const cleanName = rowData[0].replace(/^[^\s]{2,3}[都道府県]/, '') || rowData[0];
           if (rowData) selectedData.push({ cleanName, rowData });
         });
       }
-      
       let html = '<table><thead><tr><th class="header-item">項目</th>';
       selectedData.forEach(item => html += `<th class="header-target">${item.cleanName}</th>`);
       html += '</tr></thead><tbody>';
-      
       for (let i = startCol; i < headers.length; i++) {
         if (!headers[i]) continue;
         html += `<tr><th class="header-item">${headers[i]}</th>`;
@@ -556,7 +585,6 @@
         html += '</tr>';
       }
       html += '</tbody></table>';
-      
       resultArea.innerHTML = html;
       resultArea.scrollIntoView({ behavior: 'smooth' });
     }
@@ -569,9 +597,7 @@
     currentMode: '商圏',
 
     render(container, rankingSubway, dataAdmin) {
-      this.rankingSubway = rankingSubway; // 新しいランキング用データ
-      this.dataAdmin = dataAdmin;
-
+      this.rankingSubway = rankingSubway; this.dataAdmin = dataAdmin;
       container.innerHTML = `
         <div class="sub-tabs">
           <div class="sub-tab active" data-mode="商圏">商圏ランキング</div>
@@ -580,7 +606,6 @@
         <div id="ranking-form-area"></div>
         <div id="ranking-result-area"></div>
       `;
-
       const tabs = container.querySelectorAll('.sub-tab');
       tabs.forEach(tab => {
         tab.addEventListener('click', (e) => {
@@ -597,7 +622,6 @@
 
     renderForm() {
       const formArea = document.getElementById('ranking-form-area');
-      
       if (this.currentMode === '商圏') {
         formArea.innerHTML = `
           <div class="step-card">
@@ -607,14 +631,10 @@
           </div>
         `;
         const selectBox = document.getElementById('ranking-category-select');
-        // ランキングシートは1列目が駅名、2列目以降が指標と想定
         for (let i = 1; i < this.rankingSubway.headers.length; i++) {
-          if (this.rankingSubway.headers[i]) {
-            selectBox.innerHTML += `<option value="${i}">${this.rankingSubway.headers[i]}</option>`;
-          }
+          if (this.rankingSubway.headers[i]) selectBox.innerHTML += `<option value="${i}">${this.rankingSubway.headers[i]}</option>`;
         }
         document.getElementById('calc-ranking-btn').addEventListener('click', () => this.calcSubwayRanking());
-
       } else {
         formArea.innerHTML = `
           <div class="step-card">
@@ -634,9 +654,7 @@
         `;
         const selectBox = document.getElementById('ranking-category-select');
         for (let i = 2; i < this.dataAdmin.headers.length; i++) {
-          if (this.dataAdmin.headers[i]) {
-            selectBox.innerHTML += `<option value="${i}">${this.dataAdmin.headers[i]}</option>`;
-          }
+          if (this.dataAdmin.headers[i]) selectBox.innerHTML += `<option value="${i}">${this.dataAdmin.headers[i]}</option>`;
         }
         document.getElementById('calc-ranking-btn').addEventListener('click', () => this.calcAdminRanking());
       }
@@ -646,16 +664,13 @@
       const selectBox = document.getElementById('ranking-category-select');
       const targetColIndex = parseInt(selectBox.value, 10);
       const colName = this.rankingSubway.headers[targetColIndex];
-      
       let list = [...this.rankingSubway.rows].filter(r => r[0]); 
       list.sort((a, b) => {
         const valA = parseFloat((a[targetColIndex] || '0').replace(/,/g, '')) || 0;
         const valB = parseFloat((b[targetColIndex] || '0').replace(/,/g, '')) || 0;
         return valB - valA; 
       });
-
-      const top50 = list.slice(0, 50); 
-      this.renderTable(colName, top50, targetColIndex, 0); 
+      this.renderTable(colName, list.slice(0, 50), targetColIndex, 0); 
     },
 
     calcAdminRanking() {
@@ -668,30 +683,25 @@
         document.getElementById('ranking-result-area').innerHTML = '<div style="color:red;text-align:center;padding:15px;">区分を1つ以上選択してください。</div>';
         return;
       }
-
       let list = this.dataAdmin.rows.filter(row => {
         const name = row[0] || '';
         if (!name) return false;
         let type = '';
-        if ((name.endsWith('都') || name.endsWith('道') || name.endsWith('府') || name.endsWith('県')) && !(name.endsWith('市') || name.endsWith('区') || name.endsWith('町') || name.endsWith('村'))) {
-          type = 'pref';
-        } else if (name.startsWith('東京都') && name.endsWith('区')) { type = 'special_ward';
-        } else if (name.includes('市') && name.endsWith('区')) { type = 'ward';
-        } else if (name.endsWith('市')) { type = 'city';
-        } else if (name.endsWith('町')) { type = 'town';
-        } else if (name.endsWith('村')) { type = 'village';
-        } else { type = 'other'; }
+        if ((name.endsWith('都') || name.endsWith('道') || name.endsWith('府') || name.endsWith('県')) && !(name.endsWith('市') || name.endsWith('区') || name.endsWith('町') || name.endsWith('村'))) type = 'pref';
+        else if (name.startsWith('東京都') && name.endsWith('区')) type = 'special_ward';
+        else if (name.includes('市') && name.endsWith('区')) type = 'ward';
+        else if (name.endsWith('市')) type = 'city';
+        else if (name.endsWith('町')) type = 'town';
+        else if (name.endsWith('村')) type = 'village';
+        else type = 'other';
         return checkedTypes.includes(type);
       });
-
       list.sort((a, b) => {
         const valA = parseFloat((a[targetColIndex] || '0').replace(/,/g, '')) || 0;
         const valB = parseFloat((b[targetColIndex] || '0').replace(/,/g, '')) || 0;
         return valB - valA; 
       });
-
-      const top50 = list.slice(0, 50);
-      this.renderTable(colName, top50, targetColIndex, 0); 
+      this.renderTable(colName, list.slice(0, 50), targetColIndex, 0); 
     },
 
     renderTable(colName, dataList, valueColIndex, nameColIndex) {
@@ -710,13 +720,10 @@
       `;
       if (dataList.length === 0) html += '<tr><td colspan="3" style="text-align:center; padding: 15px;">該当するデータがありません</td></tr>';
       dataList.forEach((row, index) => {
-        const rank = index + 1;
-        const name = row[nameColIndex];
-        const value = row[valueColIndex] || '-';
         html += `<tr>
-            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${rank}</td>
-            <td style="padding:10px 8px; border-bottom:1px solid #eee;">${name}</td>
-            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right;">${value}</td>
+            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${index + 1}</td>
+            <td style="padding:10px 8px; border-bottom:1px solid #eee;">${row[nameColIndex]}</td>
+            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right;">${row[valueColIndex] || '-'}</td>
           </tr>`;
       });
       html += `</tbody></table></div>`;
@@ -725,16 +732,14 @@
   };
 
   // ==========================================
-  // 4. 重みづけ調査ビュー (WeightingView) - 新規追加
+  // 4. 重みづけ調査ビュー (WeightingView)
   // ==========================================
   const WeightingView = {
     currentMode: '商圏',
-    JAPAN_POPULATION: 125000000, // 日本の総人口(正規化用)
+    JAPAN_POPULATION: 126146099, // 人口基準値
 
     render(container, dataSubway, dataAdmin) {
-      this.dataSubway = dataSubway;
-      this.dataAdmin = dataAdmin;
-
+      this.dataSubway = dataSubway; this.dataAdmin = dataAdmin;
       container.innerHTML = `
         <div class="sub-tabs">
           <div class="sub-tab active" data-mode="商圏">商圏スコアリング</div>
@@ -743,13 +748,12 @@
         <div class="step-card" style="margin-bottom:10px;">
           <p style="font-size:0.85rem; color:#555; margin:0;">
             重視する項目に点数を入力してください。<br>
-            そのエリアが全国で占める割合を計算し、日本全体の総スコアが日本の人口（1億2,500万人）になるよう総合評価します。
+            そのエリアが全国で占める割合を計算し、日本全体の総スコアが日本の人口（約1億2,614万人）になるよう総合評価します。
           </p>
         </div>
         <div id="weighting-form-area"></div>
         <div id="weighting-result-area"></div>
       `;
-
       const tabs = container.querySelectorAll('.sub-tab');
       tabs.forEach(tab => {
         tab.addEventListener('click', (e) => {
@@ -770,7 +774,6 @@
       const startCol = this.currentMode === '商圏' ? 3 : 2;
 
       let html = `<div class="step-card" style="padding:10px 15px;"><div style="max-height: 50vh; overflow-y:auto; padding-right:5px;">`;
-      
       for (let i = startCol; i < data.headers.length; i++) {
         if (!data.headers[i]) continue;
         html += `
@@ -780,20 +783,15 @@
           </div>
         `;
       }
-      
-      html += `</div>
-        <button class="search-btn" id="calc-weighting-btn">総合スコアを計算する</button>
-      </div>`;
-      
+      html += `</div><button class="search-btn" id="calc-weighting-btn">総合スコアを計算する</button></div>`;
       formArea.innerHTML = html;
-
       document.getElementById('calc-weighting-btn').addEventListener('click', () => this.calculateScore());
     },
 
     calculateScore() {
       const data = this.currentMode === '商圏' ? this.dataSubway : this.dataAdmin;
+      const nationalTotals = this.currentMode === '商圏' ? NATIONAL_TOTALS_SUBWAY : NATIONAL_TOTALS_ADMIN;
       
-      // 1. 入力された重みを取得
       let weights = {};
       let totalWeight = 0;
       document.querySelectorAll('.weight-input').forEach(input => {
@@ -809,21 +807,22 @@
         return;
       }
 
-      // 2. 各項目の「全国合計値」を計算
+      // 各項目の「全国合計値」の取得（ハードコード優先）
       let colSums = {};
       for (const col in weights) {
-        let sum = 0;
-        data.rows.forEach(row => {
-          sum += parseFloat((row[col] || '0').replace(/,/g, '')) || 0;
-        });
-        colSums[col] = sum;
+        const headerName = data.headers[col];
+        if (nationalTotals[headerName] !== undefined) {
+          colSums[col] = nationalTotals[headerName];
+        } else {
+          // 定義がなければCSVから動的合算
+          let sum = 0;
+          data.rows.forEach(row => { sum += parseFloat((row[col] || '0').replace(/,/g, '')) || 0; });
+          colSums[col] = sum;
+        }
       }
 
-      // 3. 各エリアのスコアを計算
       let results = [];
-      const nameColIndex = 0; // 名前はA列
-
-      // 有効な行（駅名や自治体名がある行）のみ処理
+      const nameColIndex = 0; 
       let validRows = data.rows.filter(r => r[nameColIndex]);
 
       validRows.forEach(row => {
@@ -831,29 +830,24 @@
         for (const col in weights) {
           if (colSums[col] > 0) {
             const val = parseFloat((row[col] || '0').replace(/,/g, '')) || 0;
-            // そのエリアの割合 × ユーザーが付けた重み
             rawScore += (val / colSums[col]) * weights[col];
           }
         }
         
-        // 全国の合計値が「日本の総人口(125,000,000)」になるよう調整（正規化）
         let adjustedScore = rawScore * (this.JAPAN_POPULATION / totalWeight);
-        
-        // 商圏の場合は "-0.5km" 等を除去して表示
         let cleanName = row[nameColIndex];
         if (this.currentMode === '商圏') cleanName = cleanName.replace(/-0\.5km$/, '');
         
         results.push({ name: cleanName, score: Math.round(adjustedScore) });
       });
 
-      // 4. スコア順にソートして上位50件を表示
       results.sort((a, b) => b.score - a.score);
       const top50 = results.slice(0, 50);
 
       let html = `
         <div class="step-card">
           <h3 style="margin-top:0; border-bottom:2px solid #ff5a5f; padding-bottom:5px;">総合スコア ランキング (上位50件)</h3>
-          <p style="font-size:0.8rem; color:#666; text-align:right;">※日本全体＝125,000,000として算出</p>
+          <p style="font-size:0.8rem; color:#666; text-align:right;">※日本全体＝${this.JAPAN_POPULATION.toLocaleString()}として算出</p>
           <table style="width:100%; border-collapse: collapse; margin-top:10px; font-size:0.9rem;">
             <thead>
               <tr>
@@ -864,7 +858,6 @@
             </thead>
             <tbody>
       `;
-
       top50.forEach((item, index) => {
         html += `<tr>
             <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${index + 1}</td>
