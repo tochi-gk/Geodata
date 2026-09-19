@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>データ比較システム (スマホ版)</title>
+  <title>データ比較・分析システム (スマホ版)</title>
   <style>
     /* ========== ベーススタイル ========== */
     * { box-sizing: border-box; }
@@ -13,7 +13,7 @@
       padding: 0;
       background-color: #f2f2f7;
       color: #333;
-      padding-bottom: 60px;
+      padding-bottom: 70px;
     }
     header {
       background: #fff;
@@ -44,7 +44,7 @@
       flex: 1;
       text-align: center;
       padding: 12px 0;
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       color: #8e8e93;
       cursor: pointer;
     }
@@ -76,7 +76,7 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* ========== 第3階層：検索ステップ ========== */
+    /* ========== UIコンポーネント ========== */
     .step-card {
       background: #fff;
       border-radius: 10px;
@@ -98,8 +98,8 @@
       border-radius: 6px;
       background: #fafafa;
     }
-
-    /* ========== アコーディオン UI (リスト) ========== */
+    
+    /* リスト・アコーディオン */
     .list-group { margin-bottom: 10px; }
     .list-header {
       background: #f0f0f5;
@@ -116,14 +116,6 @@
       border-radius: 6px 6px 0 0;
       background: #e5e5ea;
     }
-    .toggle-icon {
-      transition: transform 0.3s;
-      font-size: 0.8rem;
-    }
-    .list-header.open .toggle-icon {
-      transform: rotate(180deg);
-    }
-    
     .list-container {
       display: none;
       padding: 5px 15px;
@@ -142,12 +134,12 @@
       border-bottom: 1px solid #eee;
     }
     .list-item:last-child { border-bottom: none; }
-    .list-item input {
+    .list-item input[type="checkbox"] {
       transform: scale(1.3);
       margin-right: 12px;
     }
 
-    /* 検索ボタンなど */
+    /* ボタン類 */
     .search-btn {
       width: 100%;
       padding: 16px;
@@ -171,7 +163,7 @@
       cursor: pointer;
     }
 
-    /* 比較結果テーブル */
+    /* テーブル */
     .result-wrapper {
       margin-top: 20px;
       overflow-x: auto;
@@ -190,19 +182,41 @@
       padding: 10px;
       text-align: center;
     }
-    
-    /* 要望対応: 項目も横に一緒にスライド（スクロール）するように変更 */
     th.header-item {
       background-color: #f9f9f9;
       text-align: left;
-      /* position: sticky を削除して固定を解除しました */
     }
     th.header-target { background-color: #e6f2ff; font-size: 0.9rem; min-width:100px; }
+
+    /* 重みづけ調査用 UI */
+    .weight-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .weight-item:last-child { border-bottom: none; }
+    .weight-label {
+      font-size: 0.85rem;
+      flex: 1;
+      padding-right: 10px;
+      white-space: normal;
+      word-break: break-all;
+    }
+    .weight-input {
+      width: 70px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      text-align: right;
+      font-size: 1rem;
+    }
   </style>
 </head>
 <body>
 
-<header id="main-header">データ比較システム</header>
+<header id="main-header">データ比較・分析</header>
 
 <div class="content-area" id="view-area">
   <div style="text-align:center; padding: 40px;" id="loading-msg">データを読み込み中...</div>
@@ -211,7 +225,7 @@
 <nav class="bottom-nav" id="bottom-nav" style="display: none;">
   <div class="nav-item active" data-view="data">📊 データ</div>
   <div class="nav-item" data-view="ranking">👑 ランキング</div>
-  <div class="nav-item" data-view="timetable">🕒 時間表</div>
+  <div class="nav-item" data-view="weighting">⚖️ 重みづけ</div>
   <div class="nav-item" data-view="other">⚙️ その他</div>
 </nav>
 
@@ -220,27 +234,28 @@
   // 1. システム中核 (AppCore)
   // ==========================================
   const AppCore = {
-    URL_SUBWAY: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWIvVKpVGibqTl0uL0cv4IfZVEPxEiiSbakzEVLGGcO2kjvp3Uyc_K5f_h6K-VzeVfkQFSb1z9jdJM/pub?gid=0&single=true&output=csv',
+    // URL群 (データ用、ランキング用、行政区用)
+    URL_SUBWAY_DATA: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWIvVKpVGibqTl0uL0cv4IfZVEPxEiiSbakzEVLGGcO2kjvp3Uyc_K5f_h6K-VzeVfkQFSb1z9jdJM/pub?gid=0&single=true&output=csv',
+    URL_SUBWAY_RANKING: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWIvVKpVGibqTl0uL0cv4IfZVEPxEiiSbakzEVLGGcO2kjvp3Uyc_K5f_h6K-VzeVfkQFSb1z9jdJM/pub?gid=1551612660&single=true&output=csv',
     URL_ADMIN: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT0aD_hVGXuEgScPe4fdO0SinUYsPwog2CLiefIdZosotReUGLWpiKx8Dw3upfTD-sherpYef-GV9Sy/pub?gid=335081747&single=true&output=csv',
     
     dataSubway: { rows: [], headers: [] },
+    rankingSubway: { rows: [], headers: [] },
     dataAdmin: { rows: [], headers: [] },
 
     async init() {
       try {
-        const [resSubway, resAdmin] = await Promise.all([
-          fetch(this.URL_SUBWAY),
+        const [resSubData, resSubRank, resAdmin] = await Promise.all([
+          fetch(this.URL_SUBWAY_DATA),
+          fetch(this.URL_SUBWAY_RANKING),
           fetch(this.URL_ADMIN)
         ]);
 
-        if (!resSubway.ok) throw new Error(`HTTP Error Subway: ${resSubway.status}`);
-        if (!resAdmin.ok) throw new Error(`HTTP Error Admin: ${resAdmin.status}`);
+        if (!resSubData.ok || !resSubRank.ok || !resAdmin.ok) throw new Error(`HTTP Error during fetch`);
 
-        let textSubway = await resSubway.text();
-        let textAdmin = await resAdmin.text();
-
-        this.dataSubway = this.parseCSV(textSubway);
-        this.dataAdmin = this.parseCSV(textAdmin);
+        this.dataSubway = this.parseCSV(await resSubData.text());
+        this.rankingSubway = this.parseCSV(await resSubRank.text());
+        this.dataAdmin = this.parseCSV(await resAdmin.text());
         
         document.getElementById('bottom-nav').style.display = 'flex';
         this.setupBottomNav();
@@ -255,35 +270,24 @@
       if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
       const result = [];
       let row = [], cell = '', inQuotes = false;
-      
       for (let i = 0; i < text.length; i++) {
-        const c = text[i];
-        const nextC = text[i + 1];
-        
+        const c = text[i], nextC = text[i + 1];
         if (c === '"') {
-          if (inQuotes && nextC === '"') {
-            cell += '"'; 
-            i++;
-          } else {
-            inQuotes = !inQuotes; 
-          }
+          if (inQuotes && nextC === '"') { cell += '"'; i++; } 
+          else { inQuotes = !inQuotes; }
         } else if (c === ',' && !inQuotes) {
-          row.push(cell.trim());
-          cell = '';
+          row.push(cell.trim()); cell = '';
         } else if ((c === '\n' || (c === '\r' && nextC === '\n')) && !inQuotes) {
           row.push(cell.trim());
           if (row.length > 0 && !(row.length === 1 && row[0] === '')) result.push(row);
           row = []; cell = '';
           if (c === '\r') i++; 
-        } else {
-          cell += c;
-        }
+        } else { cell += c; }
       }
       if (cell !== '' || row.length > 0) {
         row.push(cell.trim());
         if (!(row.length === 1 && row[0] === '')) result.push(row);
       }
-      
       return { headers: result[0] || [], rows: result.slice(1) };
     },
 
@@ -304,7 +308,9 @@
       if (viewName === 'data') {
         DataView.render(viewArea, this.dataSubway, this.dataAdmin);
       } else if (viewName === 'ranking') {
-        RankingView.render(viewArea, this.dataSubway, this.dataAdmin); 
+        RankingView.render(viewArea, this.rankingSubway, this.dataAdmin); 
+      } else if (viewName === 'weighting') {
+        WeightingView.render(viewArea, this.dataSubway, this.dataAdmin);
       } else {
         viewArea.innerHTML = `<div style="text-align:center; padding:40px;">「${viewName}」は準備中です</div>`;
       }
@@ -319,10 +325,7 @@
     treeSubway: {}, treeAdmin: {},
     citiesSubway: [], prefsAdmin: [],
     rawSubway: null, rawAdmin: null,
-    
-    // 【追加】複数都道府県またぎ選択用の状態保持
-    selectedSubway: new Set(),
-    selectedAdmin: new Set(),
+    selectedSubway: new Set(), selectedAdmin: new Set(),
 
     render(container, dataSubway, dataAdmin) {
       this.rawSubway = dataSubway;
@@ -333,8 +336,8 @@
       
       container.innerHTML = `
         <div class="sub-tabs" id="sub-tabs">
-          <div class="sub-tab active" data-mode="商圏">商圏から探す</div>
-          <div class="sub-tab" data-mode="行政">行政区から探す</div>
+          <div class="sub-tab active" data-mode="商圏">商圏データ</div>
+          <div class="sub-tab" data-mode="行政">行政区データ</div>
         </div>
         <div id="search-form-area"></div>
         <div id="result-area" class="result-wrapper"></div>
@@ -347,7 +350,6 @@
           tabs.forEach(t => t.classList.remove('active'));
           e.currentTarget.classList.add('active');
           this.currentMode = e.currentTarget.dataset.mode;
-          
           document.getElementById('result-area').innerHTML = '';
           this.renderForm();
         });
@@ -358,7 +360,6 @@
     buildSubwayTree(rows) {
       this.treeSubway = {};
       const CITY_ORDER = ['札幌', '仙台', '東京メトロ', '都営地下鉄', '横浜', '名古屋', '京都', '大阪', '神戸', '福岡'];
-
       rows.forEach(row => {
         const station = row[0], operator = row[1], line = row[2] || 'その他';
         if (!station) return;
@@ -373,7 +374,6 @@
         if (!this.treeSubway[city][line]) this.treeSubway[city][line] = [];
         this.treeSubway[city][line].push({ rawName: station, cleanName: station.replace(/-0\.5km$/, ''), rowData: row });
       });
-
       this.citiesSubway = Object.keys(this.treeSubway).sort((a, b) => {
         let iA = CITY_ORDER.indexOf(a), iB = CITY_ORDER.indexOf(b);
         return (iA === -1 ? 999 : iA) - (iB === -1 ? 999 : iB);
@@ -385,20 +385,12 @@
       rows.forEach((row, index) => {
         const fullLocation = row[0];
         if (!fullLocation) return;
-        
         let pref = 'その他', city = fullLocation;
-        const prefEndIndex = Math.max(
-          fullLocation.indexOf('都'),
-          fullLocation.indexOf('道'),
-          fullLocation.indexOf('府'),
-          fullLocation.indexOf('県')
-        );
-
+        const prefEndIndex = Math.max(fullLocation.indexOf('都'), fullLocation.indexOf('道'), fullLocation.indexOf('府'), fullLocation.indexOf('県'));
         if (prefEndIndex > 0 && prefEndIndex < 4) {
           pref = fullLocation.substring(0, prefEndIndex + 1);
           city = fullLocation.substring(prefEndIndex + 1) || '全体';
         }
-
         if (!this.treeAdmin[pref]) this.treeAdmin[pref] = [];
         this.treeAdmin[pref].push({ rawName: fullLocation, cleanName: city, rowData: row, index: index });
       });
@@ -412,43 +404,28 @@
       if (this.currentMode === '商圏') {
         formArea.innerHTML = `
           <div class="step-card">
-            <div class="step-title">1. 交通機関の種類</div>
-            <select id="select-type"><option value="subway">地下鉄</option></select>
-          </div>
-          <div class="step-card">
-            <div class="step-title">2. 対象の都市 (複数選択して比較可能)</div>
+            <div class="step-title">1. 対象の都市 (複数選択可)</div>
             <select id="select-target"></select>
           </div>
           <div class="step-card">
-            <div class="step-title">3. 路線と駅を選ぶ</div>
+            <div class="step-title">2. 路線と駅を選ぶ</div>
             <div id="selection-list"></div>
           </div>
-          <div style="text-align:center; margin-bottom:15px; font-size:0.95rem;">
-            選択中: <strong id="selected-count" style="color:#007aff; font-size:1.1rem;">${count}</strong> 件
-            <button class="clear-btn" id="clear-btn">全てクリア</button>
-          </div>
-          <button class="search-btn" id="search-btn">比較する</button>
         `;
         const selectBox = document.getElementById('select-target');
         this.citiesSubway.forEach(city => selectBox.innerHTML += `<option value="${city}">${city}</option>`);
         selectBox.addEventListener('change', (e) => this.renderSubwayList(e.target.value));
         if (this.citiesSubway.length > 0) this.renderSubwayList(this.citiesSubway[0]);
-        
       } else {
         formArea.innerHTML = `
           <div class="step-card">
-            <div class="step-title">1. 対象の都道府県 (複数選択して比較可能)</div>
+            <div class="step-title">1. 対象の都道府県 (複数選択可)</div>
             <select id="select-target"></select>
           </div>
           <div class="step-card">
             <div class="step-title">2. 市区町村を選ぶ</div>
             <div id="selection-list"></div>
           </div>
-          <div style="text-align:center; margin-bottom:15px; font-size:0.95rem;">
-            選択中: <strong id="selected-count" style="color:#007aff; font-size:1.1rem;">${count}</strong> 件
-            <button class="clear-btn" id="clear-btn">全てクリア</button>
-          </div>
-          <button class="search-btn" id="search-btn">比較する</button>
         `;
         const selectBox = document.getElementById('select-target');
         this.prefsAdmin.forEach(pref => selectBox.innerHTML += `<option value="${pref}">${pref}</option>`);
@@ -456,14 +433,20 @@
         if (this.prefsAdmin.length > 0) this.renderAdminList(this.prefsAdmin[0]);
       }
 
-      // イベントリスナーの登録
+      formArea.innerHTML += `
+        <div style="text-align:center; margin-bottom:15px; font-size:0.95rem;">
+          選択中: <strong id="selected-count" style="color:#007aff; font-size:1.1rem;">${count}</strong> 件
+          <button class="clear-btn" id="clear-btn">クリア</button>
+        </div>
+        <button class="search-btn" id="search-btn">比較表を作成する</button>
+      `;
+
       document.getElementById('search-btn').addEventListener('click', () => this.renderResults());
-      
       document.getElementById('clear-btn').addEventListener('click', () => {
         if (this.currentMode === '商圏') this.selectedSubway.clear();
         else this.selectedAdmin.clear();
-        this.renderForm(); // 再描画してチェックを外す
-        document.getElementById('result-area').innerHTML = ''; // 表も消す
+        this.renderForm(); 
+        document.getElementById('result-area').innerHTML = ''; 
       });
     },
 
@@ -471,15 +454,12 @@
       const container = document.getElementById('selection-list');
       container.innerHTML = '';
       if (!this.treeSubway[city]) return;
-      
       for (const line in this.treeSubway[city]) {
         const group = document.createElement('div');
         group.className = 'list-group';
-        
         const header = document.createElement('div');
         header.className = 'list-header';
         header.innerHTML = `<span>${line}</span><span class="toggle-icon">▼</span>`;
-        
         const listContainer = document.createElement('div');
         listContainer.className = 'list-container';
         
@@ -488,13 +468,11 @@
           const item = document.createElement('label');
           item.className = 'list-item';
           item.innerHTML = `<input type="checkbox" value="${st.rawName}" ${isChecked ? 'checked' : ''}> ${st.cleanName}`;
-          
           item.querySelector('input').addEventListener('change', (e) => {
             if (e.target.checked) this.selectedSubway.add(st.rawName);
             else this.selectedSubway.delete(st.rawName);
             document.getElementById('selected-count').textContent = this.selectedSubway.size;
           });
-          
           listContainer.appendChild(item);
         });
         
@@ -502,9 +480,7 @@
           listContainer.classList.toggle('open');
           header.classList.toggle('open');
         });
-        
-        group.appendChild(header);
-        group.appendChild(listContainer);
+        group.appendChild(header); group.appendChild(listContainer);
         container.appendChild(group);
       }
     },
@@ -513,14 +489,11 @@
       const container = document.getElementById('selection-list');
       container.innerHTML = '';
       if (!this.treeAdmin[pref]) return;
-      
       const group = document.createElement('div');
       group.className = 'list-group';
-      
       const header = document.createElement('div');
       header.className = 'list-header';
       header.innerHTML = `<span>市区町村一覧</span><span class="toggle-icon">▼</span>`;
-      
       const listContainer = document.createElement('div');
       listContainer.className = 'list-container';
       
@@ -530,13 +503,11 @@
         const item = document.createElement('label');
         item.className = 'list-item';
         item.innerHTML = `<input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''}> ${cityObj.cleanName}`;
-        
         item.querySelector('input').addEventListener('change', (e) => {
           if (e.target.checked) this.selectedAdmin.add(val);
           else this.selectedAdmin.delete(val);
           document.getElementById('selected-count').textContent = this.selectedAdmin.size;
         });
-        
         listContainer.appendChild(item);
       });
       
@@ -544,31 +515,19 @@
         listContainer.classList.toggle('open');
         header.classList.toggle('open');
       });
-      
-      group.appendChild(header);
-      group.appendChild(listContainer);
+      group.appendChild(header); group.appendChild(listContainer);
       container.appendChild(group);
     },
 
     renderResults() {
-      // 画面上のチェックボックスからではなく、グローバルに保持したSetから値を取得する
-      let selectedValues = [];
-      if (this.currentMode === '商圏') {
-        selectedValues = Array.from(this.selectedSubway);
-      } else {
-        selectedValues = Array.from(this.selectedAdmin);
-      }
-
+      let selectedValues = this.currentMode === '商圏' ? Array.from(this.selectedSubway) : Array.from(this.selectedAdmin);
       const resultArea = document.getElementById('result-area');
       if (selectedValues.length === 0) {
         resultArea.innerHTML = '<div style="padding:15px; color:red; text-align:center;">比較する項目を選択してください</div>';
         return;
       }
       
-      let selectedData = [];
-      let headers = [];
-      let startCol = 0;
-      
+      let selectedData = [], headers = [], startCol = 0;
       if (this.currentMode === '商圏') {
         headers = this.rawSubway.headers;
         startCol = 3; 
@@ -581,10 +540,8 @@
         startCol = 2; 
         selectedValues.forEach(indexStr => {
           const rowData = this.rawAdmin.rows[parseInt(indexStr, 10)];
-          const fullLocation = rowData[0];
-          // 表示名が長くなりすぎないように調整
-          const cleanName = fullLocation.replace(/^[^\s]{2,3}[都道府県]/, '') || fullLocation;
-          if (rowData) selectedData.push({ cleanName: cleanName, rowData });
+          const cleanName = rowData[0].replace(/^[^\s]{2,3}[都道府県]/, '') || rowData[0];
+          if (rowData) selectedData.push({ cleanName, rowData });
         });
       }
       
@@ -611,8 +568,8 @@
   const RankingView = {
     currentMode: '商圏',
 
-    render(container, dataSubway, dataAdmin) {
-      this.dataSubway = dataSubway;
+    render(container, rankingSubway, dataAdmin) {
+      this.rankingSubway = rankingSubway; // 新しいランキング用データ
       this.dataAdmin = dataAdmin;
 
       container.innerHTML = `
@@ -650,9 +607,10 @@
           </div>
         `;
         const selectBox = document.getElementById('ranking-category-select');
-        for (let i = 3; i < this.dataSubway.headers.length; i++) {
-          if (this.dataSubway.headers[i]) {
-            selectBox.innerHTML += `<option value="${i}">${this.dataSubway.headers[i]}</option>`;
+        // ランキングシートは1列目が駅名、2列目以降が指標と想定
+        for (let i = 1; i < this.rankingSubway.headers.length; i++) {
+          if (this.rankingSubway.headers[i]) {
+            selectBox.innerHTML += `<option value="${i}">${this.rankingSubway.headers[i]}</option>`;
           }
         }
         document.getElementById('calc-ranking-btn').addEventListener('click', () => this.calcSubwayRanking());
@@ -687,9 +645,9 @@
     calcSubwayRanking() {
       const selectBox = document.getElementById('ranking-category-select');
       const targetColIndex = parseInt(selectBox.value, 10);
-      const colName = this.dataSubway.headers[targetColIndex];
+      const colName = this.rankingSubway.headers[targetColIndex];
       
-      let list = [...this.dataSubway.rows].filter(r => r[0]); 
+      let list = [...this.rankingSubway.rows].filter(r => r[0]); 
       list.sort((a, b) => {
         const valA = parseFloat((a[targetColIndex] || '0').replace(/,/g, '')) || 0;
         const valB = parseFloat((b[targetColIndex] || '0').replace(/,/g, '')) || 0;
@@ -714,26 +672,15 @@
       let list = this.dataAdmin.rows.filter(row => {
         const name = row[0] || '';
         if (!name) return false;
-
         let type = '';
-        if (
-          (name.endsWith('都') || name.endsWith('道') || name.endsWith('府') || name.endsWith('県')) &&
-          !(name.endsWith('市') || name.endsWith('区') || name.endsWith('町') || name.endsWith('村'))
-        ) {
+        if ((name.endsWith('都') || name.endsWith('道') || name.endsWith('府') || name.endsWith('県')) && !(name.endsWith('市') || name.endsWith('区') || name.endsWith('町') || name.endsWith('村'))) {
           type = 'pref';
-        } else if (name.startsWith('東京都') && name.endsWith('区')) {
-          type = 'special_ward';
-        } else if (name.includes('市') && name.endsWith('区')) {
-          type = 'ward';
-        } else if (name.endsWith('市')) {
-          type = 'city';
-        } else if (name.endsWith('町')) {
-          type = 'town';
-        } else if (name.endsWith('村')) {
-          type = 'village';
-        } else {
-          type = 'other';
-        }
+        } else if (name.startsWith('東京都') && name.endsWith('区')) { type = 'special_ward';
+        } else if (name.includes('市') && name.endsWith('区')) { type = 'ward';
+        } else if (name.endsWith('市')) { type = 'city';
+        } else if (name.endsWith('町')) { type = 'town';
+        } else if (name.endsWith('村')) { type = 'village';
+        } else { type = 'other'; }
         return checkedTypes.includes(type);
       });
 
@@ -761,27 +708,181 @@
             </thead>
             <tbody>
       `;
-      if (dataList.length === 0) {
-         html += '<tr><td colspan="3" style="text-align:center; padding: 15px;">該当するデータがありません</td></tr>';
-      }
+      if (dataList.length === 0) html += '<tr><td colspan="3" style="text-align:center; padding: 15px;">該当するデータがありません</td></tr>';
       dataList.forEach((row, index) => {
         const rank = index + 1;
         const name = row[nameColIndex];
         const value = row[valueColIndex] || '-';
-        html += `
-          <tr>
+        html += `<tr>
             <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${rank}</td>
             <td style="padding:10px 8px; border-bottom:1px solid #eee;">${name}</td>
             <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right;">${value}</td>
-          </tr>
-        `;
+          </tr>`;
       });
       html += `</tbody></table></div>`;
       document.getElementById('ranking-result-area').innerHTML = html;
     }
   };
 
-  // 起動
+  // ==========================================
+  // 4. 重みづけ調査ビュー (WeightingView) - 新規追加
+  // ==========================================
+  const WeightingView = {
+    currentMode: '商圏',
+    JAPAN_POPULATION: 125000000, // 日本の総人口(正規化用)
+
+    render(container, dataSubway, dataAdmin) {
+      this.dataSubway = dataSubway;
+      this.dataAdmin = dataAdmin;
+
+      container.innerHTML = `
+        <div class="sub-tabs">
+          <div class="sub-tab active" data-mode="商圏">商圏スコアリング</div>
+          <div class="sub-tab" data-mode="行政">行政区スコアリング</div>
+        </div>
+        <div class="step-card" style="margin-bottom:10px;">
+          <p style="font-size:0.85rem; color:#555; margin:0;">
+            重視する項目に点数を入力してください。<br>
+            そのエリアが全国で占める割合を計算し、日本全体の総スコアが日本の人口（1億2,500万人）になるよう総合評価します。
+          </p>
+        </div>
+        <div id="weighting-form-area"></div>
+        <div id="weighting-result-area"></div>
+      `;
+
+      const tabs = container.querySelectorAll('.sub-tab');
+      tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+          if(this.currentMode === e.currentTarget.dataset.mode) return;
+          tabs.forEach(t => t.classList.remove('active'));
+          e.currentTarget.classList.add('active');
+          this.currentMode = e.currentTarget.dataset.mode;
+          document.getElementById('weighting-result-area').innerHTML = ''; 
+          this.renderForm();
+        });
+      });
+      this.renderForm();
+    },
+
+    renderForm() {
+      const formArea = document.getElementById('weighting-form-area');
+      const data = this.currentMode === '商圏' ? this.dataSubway : this.dataAdmin;
+      const startCol = this.currentMode === '商圏' ? 3 : 2;
+
+      let html = `<div class="step-card" style="padding:10px 15px;"><div style="max-height: 50vh; overflow-y:auto; padding-right:5px;">`;
+      
+      for (let i = startCol; i < data.headers.length; i++) {
+        if (!data.headers[i]) continue;
+        html += `
+          <div class="weight-item">
+            <div class="weight-label">${data.headers[i]}</div>
+            <input type="number" min="0" max="100" class="weight-input" data-col="${i}" placeholder="0">
+          </div>
+        `;
+      }
+      
+      html += `</div>
+        <button class="search-btn" id="calc-weighting-btn">総合スコアを計算する</button>
+      </div>`;
+      
+      formArea.innerHTML = html;
+
+      document.getElementById('calc-weighting-btn').addEventListener('click', () => this.calculateScore());
+    },
+
+    calculateScore() {
+      const data = this.currentMode === '商圏' ? this.dataSubway : this.dataAdmin;
+      
+      // 1. 入力された重みを取得
+      let weights = {};
+      let totalWeight = 0;
+      document.querySelectorAll('.weight-input').forEach(input => {
+        const val = parseFloat(input.value) || 0;
+        if (val > 0) {
+          weights[input.dataset.col] = val;
+          totalWeight += val;
+        }
+      });
+
+      if (totalWeight === 0) {
+        alert('1つ以上の項目に点数（重み）を入力してください。');
+        return;
+      }
+
+      // 2. 各項目の「全国合計値」を計算
+      let colSums = {};
+      for (const col in weights) {
+        let sum = 0;
+        data.rows.forEach(row => {
+          sum += parseFloat((row[col] || '0').replace(/,/g, '')) || 0;
+        });
+        colSums[col] = sum;
+      }
+
+      // 3. 各エリアのスコアを計算
+      let results = [];
+      const nameColIndex = 0; // 名前はA列
+
+      // 有効な行（駅名や自治体名がある行）のみ処理
+      let validRows = data.rows.filter(r => r[nameColIndex]);
+
+      validRows.forEach(row => {
+        let rawScore = 0;
+        for (const col in weights) {
+          if (colSums[col] > 0) {
+            const val = parseFloat((row[col] || '0').replace(/,/g, '')) || 0;
+            // そのエリアの割合 × ユーザーが付けた重み
+            rawScore += (val / colSums[col]) * weights[col];
+          }
+        }
+        
+        // 全国の合計値が「日本の総人口(125,000,000)」になるよう調整（正規化）
+        let adjustedScore = rawScore * (this.JAPAN_POPULATION / totalWeight);
+        
+        // 商圏の場合は "-0.5km" 等を除去して表示
+        let cleanName = row[nameColIndex];
+        if (this.currentMode === '商圏') cleanName = cleanName.replace(/-0\.5km$/, '');
+        
+        results.push({ name: cleanName, score: Math.round(adjustedScore) });
+      });
+
+      // 4. スコア順にソートして上位50件を表示
+      results.sort((a, b) => b.score - a.score);
+      const top50 = results.slice(0, 50);
+
+      let html = `
+        <div class="step-card">
+          <h3 style="margin-top:0; border-bottom:2px solid #ff5a5f; padding-bottom:5px;">総合スコア ランキング (上位50件)</h3>
+          <p style="font-size:0.8rem; color:#666; text-align:right;">※日本全体＝125,000,000として算出</p>
+          <table style="width:100%; border-collapse: collapse; margin-top:10px; font-size:0.9rem;">
+            <thead>
+              <tr>
+                <th style="padding:8px; border-bottom:1px solid #ccc; width:40px;">順位</th>
+                <th style="padding:8px; border-bottom:1px solid #ccc; text-align:left;">名称</th>
+                <th style="padding:8px; border-bottom:1px solid #ccc; text-align:right;">スコア</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      top50.forEach((item, index) => {
+        html += `<tr>
+            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${index + 1}</td>
+            <td style="padding:10px 8px; border-bottom:1px solid #eee;">${item.name}</td>
+            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right; font-weight:bold; color:#007aff;">
+              ${item.score.toLocaleString()}
+            </td>
+          </tr>`;
+      });
+      html += `</tbody></table></div>`;
+      
+      const resultArea = document.getElementById('weighting-result-area');
+      resultArea.innerHTML = html;
+      resultArea.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  // アプリケーション起動
   AppCore.init();
 </script>
 </body>
