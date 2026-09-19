@@ -331,7 +331,8 @@
       } else if (viewName === 'ranking') {
         RankingView.render(viewArea, this.rankingSubway, this.dataAdmin); 
       } else if (viewName === 'weighting') {
-        WeightingView.render(viewArea, this.dataSubway, this.dataAdmin);
+        // ここを修正：重みづけにはシート2（rankingSubway）を渡す
+        WeightingView.render(viewArea, this.rankingSubway, this.dataAdmin);
       } else {
         viewArea.innerHTML = `<div style="text-align:center; padding:40px;">「${viewName}」は準備中です</div>`;
       }
@@ -415,7 +416,6 @@
       this.prefsAdmin = Object.keys(this.treeAdmin);
     },
 
-    // バグ修正: innerHTML破壊によるアコーディオン不具合の修正
     renderForm() {
       const formArea = document.getElementById('search-form-area');
       const count = this.currentMode === '商圏' ? this.selectedSubway.size : this.selectedAdmin.size;
@@ -453,7 +453,6 @@
         <button class="search-btn" id="search-btn">比較表を作成する</button>
       `;
       
-      // HTMLを一度に流し込んだあとでDOMイベントを登録する（イベント消失防止）
       formArea.innerHTML = html;
 
       const selectBox = document.getElementById('select-target');
@@ -731,7 +730,7 @@
     }
   };
 
-// ==========================================
+  // ==========================================
   // 4. 重みづけ調査ビュー (WeightingView) - シート2対応版
   // ==========================================
   const WeightingView = {
@@ -739,7 +738,7 @@
     JAPAN_POPULATION: 126146099, // 人口基準値
 
     render(container, rankingSubway, dataAdmin) {
-      this.rankingSubway = rankingSubway; // ★シート2のデータを使用
+      this.rankingSubway = rankingSubway; // シート2のデータを使用
       this.dataAdmin = dataAdmin;
       
       container.innerHTML = `
@@ -774,7 +773,7 @@
       const formArea = document.getElementById('weighting-form-area');
       const data = this.currentMode === '商圏' ? this.rankingSubway : this.dataAdmin;
       
-      // ★商圏（シート2）の場合は2列目(インデックス1)からデータ開始、行政区は3列目(インデックス2)から
+      // 商圏（シート2）の場合は2列目(インデックス1)からデータ開始、行政区は3列目(インデックス2)から
       const startCol = this.currentMode === '商圏' ? 1 : 2;
 
       let html = `<div class="step-card" style="padding:10px 15px;"><div style="max-height: 50vh; overflow-y:auto; padding-right:5px;">`;
@@ -878,6 +877,7 @@
       resultArea.scrollIntoView({ behavior: 'smooth' });
     }
   };
+
   // アプリケーション起動
   AppCore.init();
 </script>
