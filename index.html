@@ -731,15 +731,17 @@
     }
   };
 
-  // ==========================================
-  // 4. 重みづけ調査ビュー (WeightingView)
+// ==========================================
+  // 4. 重みづけ調査ビュー (WeightingView) - シート2対応版
   // ==========================================
   const WeightingView = {
     currentMode: '商圏',
     JAPAN_POPULATION: 126146099, // 人口基準値
 
-    render(container, dataSubway, dataAdmin) {
-      this.dataSubway = dataSubway; this.dataAdmin = dataAdmin;
+    render(container, rankingSubway, dataAdmin) {
+      this.rankingSubway = rankingSubway; // ★シート2のデータを使用
+      this.dataAdmin = dataAdmin;
+      
       container.innerHTML = `
         <div class="sub-tabs">
           <div class="sub-tab active" data-mode="商圏">商圏スコアリング</div>
@@ -770,8 +772,10 @@
 
     renderForm() {
       const formArea = document.getElementById('weighting-form-area');
-      const data = this.currentMode === '商圏' ? this.dataSubway : this.dataAdmin;
-      const startCol = this.currentMode === '商圏' ? 3 : 2;
+      const data = this.currentMode === '商圏' ? this.rankingSubway : this.dataAdmin;
+      
+      // ★商圏（シート2）の場合は2列目(インデックス1)からデータ開始、行政区は3列目(インデックス2)から
+      const startCol = this.currentMode === '商圏' ? 1 : 2;
 
       let html = `<div class="step-card" style="padding:10px 15px;"><div style="max-height: 50vh; overflow-y:auto; padding-right:5px;">`;
       for (let i = startCol; i < data.headers.length; i++) {
@@ -789,7 +793,7 @@
     },
 
     calculateScore() {
-      const data = this.currentMode === '商圏' ? this.dataSubway : this.dataAdmin;
+      const data = this.currentMode === '商圏' ? this.rankingSubway : this.dataAdmin;
       const nationalTotals = this.currentMode === '商圏' ? NATIONAL_TOTALS_SUBWAY : NATIONAL_TOTALS_ADMIN;
       
       let weights = {};
@@ -807,14 +811,14 @@
         return;
       }
 
-      // 各項目の「全国合計値」の取得（ハードコード優先）
+      // 各項目の「全国合計値」の取得
       let colSums = {};
       for (const col in weights) {
         const headerName = data.headers[col];
         if (nationalTotals[headerName] !== undefined) {
           colSums[col] = nationalTotals[headerName];
         } else {
-          // 定義がなければCSVから動的合算
+          // 事前定義がない項目は、CSVの縦列を動的合算して全体母数とする
           let sum = 0;
           data.rows.forEach(row => { sum += parseFloat((row[col] || '0').replace(/,/g, '')) || 0; });
           colSums[col] = sum;
@@ -874,7 +878,6 @@
       resultArea.scrollIntoView({ behavior: 'smooth' });
     }
   };
-
   // アプリケーション起動
   AppCore.init();
 </script>
