@@ -406,7 +406,7 @@
         const fullLocation = row[0];
         if (!fullLocation) return;
         let pref = 'その他', city = fullLocation;
-        const prefEndIndex = Math.max(fullLocation.indexOf('都'), fullLocation.indexOf('道'), fullLocation.indexOf('府'), fullLocation.indexOf('県'));
+        const prefEndIndex = Math.max(fullLocation.indexOf('東京都'), fullLocation.indexOf('北海道'), fullLocation.indexOf('大阪府'), fullLocation.indexOf('京都府'),fullLocation.indexOf('県'));
         if (prefEndIndex > 0 && prefEndIndex < 4) {
           pref = fullLocation.substring(0, prefEndIndex + 1);
           city = fullLocation.substring(prefEndIndex + 1) || '全体';
