@@ -212,6 +212,8 @@
       text-align: right;
       font-size: 1rem;
     }
+    .photo-link { color: #007aff; text-decoration: underline; }
+.photo-icon { margin-left: auto; padding: 4px 10px; text-decoration: none; font-size: 1.1rem; }
   </style>
 </head>
 <body>
@@ -230,6 +232,24 @@
 </nav>
 
 <script>
+  const PHOTO_SITE_URL = 'https://machi-photo.com/';
+
+function escapeHtml(s) {
+  return String(s).replace(/[&'`"<>]/g, c => ({ '&':'&amp;', "'":'&#x27;', '`':'&#x60;', '"':'&quot;', '<':'&lt;', '>':'&gt;' }[c]));
+}
+function photoUrl(query) {
+  const q = String(query).replace(/駅$/, '').trim();
+  return `${PHOTO_SITE_URL}?q=${encodeURIComponent(q)}`;
+}
+function photoLink(label, query = label) {
+  return `<a class="photo-link" href="${photoUrl(query)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+}
+function photoIcon(query) {
+  return `<a class="photo-icon" href="${photoUrl(query)}" target="_blank" rel="noopener" aria-label="${escapeHtml(query)}の写真を見る">📷</a>`;
+}
+function adminSearchName(name) {
+  return name.replace(/^[^\s]{2,3}[都道府県]/, '') || name;
+}
   // 全国合計値の設定（計算基準用）
   const NATIONAL_TOTALS_ADMIN = {
     "人口": 126146099, "昼間人口": 126146099, "GRP": 5740408.00,
@@ -501,7 +521,7 @@
           const isChecked = this.selectedSubway.has(st.rawName);
           const item = document.createElement('label');
           item.className = 'list-item';
-          item.innerHTML = `<input type="checkbox" value="${st.rawName}" ${isChecked ? 'checked' : ''}> ${st.cleanName}`;
+          item.innerHTML = `<input type="checkbox" value="${st.rawName}" ${isChecked ? 'checked' : ''}> <span style="flex:1">${st.cleanName}</span>${photoIcon(st.cleanName)}`;
           item.querySelector('input').addEventListener('change', (e) => {
             if (e.target.checked) this.selectedSubway.add(st.rawName);
             else this.selectedSubway.delete(st.rawName);
@@ -536,7 +556,7 @@
         const isChecked = this.selectedAdmin.has(val);
         const item = document.createElement('label');
         item.className = 'list-item';
-        item.innerHTML = `<input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''}> ${cityObj.cleanName}`;
+        item.innerHTML = `<input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''}> <span style="flex:1">${cityObj.cleanName}</span>${photoIcon(cityObj.cleanName)}`;
         item.querySelector('input').addEventListener('change', (e) => {
           if (e.target.checked) this.selectedAdmin.add(val);
           else this.selectedAdmin.delete(val);
@@ -576,7 +596,7 @@
         });
       }
       let html = '<table><thead><tr><th class="header-item">項目</th>';
-      selectedData.forEach(item => html += `<th class="header-target">${item.cleanName}</th>`);
+     selectedData.forEach(item => html += `<th class="header-target">${photoLink(item.cleanName)}</th>`);
       html += '</tr></thead><tbody>';
       for (let i = startCol; i < headers.length; i++) {
         if (!headers[i]) continue;
@@ -720,9 +740,12 @@
       `;
       if (dataList.length === 0) html += '<tr><td colspan="3" style="text-align:center; padding: 15px;">該当するデータがありません</td></tr>';
       dataList.forEach((row, index) => {
+        const raw = row[nameColIndex];
+const label = this.currentMode === '商圏' ? raw.replace(/-0\.5km$/, '') : raw;
+const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
         html += `<tr>
             <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${index + 1}</td>
-            <td style="padding:10px 8px; border-bottom:1px solid #eee;">${row[nameColIndex]}</td>
+            <td style="padding:10px 8px; border-bottom:1px solid #eee;">${photoLink(label, query)}</td>
             <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right;">${row[valueColIndex] || '-'}</td>
           </tr>`;
       });
@@ -951,7 +974,8 @@
         let cleanName = name;
         if (this.currentMode === '商圏') cleanName = cleanName.replace(/-0\.5km$/, '');
         
-        results.push({ name: cleanName, score: Math.round(adjustedScore) });
+        const query = this.currentMode === '商圏' ? cleanName : adminSearchName(name);
+results.push({ name: cleanName, query, score: Math.round(adjustedScore) });
       });
 
       results.sort((a, b) => b.score - a.score);
@@ -977,7 +1001,7 @@
         top50.forEach((item, index) => {
           html += `<tr>
               <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${index + 1}</td>
-              <td style="padding:10px 8px; border-bottom:1px solid #eee;">${item.name}</td>
+              <td style="padding:10px 8px; border-bottom:1px solid #eee;">${photoLink(item.name, item.query)}</td>
               <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right; font-weight:bold; color:#007aff;">
                 ${item.score.toLocaleString()}
               </td>
