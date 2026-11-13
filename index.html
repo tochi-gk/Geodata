@@ -461,7 +461,7 @@
 
     // 長押し検出（1秒）。押している間は太枠を表示し、スクロールしたら取り消す
     attachLongPress(el, onLongPress) {
-      const LONG_PRESS_MS = 1000;  // 長押しの時間
+      const LONG_PRESS_MS = 500;  // 長押しの時間
       const SHOW_FRAME_MS = 150;   // 太枠を出すまでの待ち時間（普通のタップで枠がちらつくのを防ぐ）
       let timer = null, frameTimer = null, fired = false, suppress = false, sx = 0, sy = 0;
 
