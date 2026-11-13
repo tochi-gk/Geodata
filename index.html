@@ -53,7 +53,7 @@
       font-weight: bold;
     }
 
-    /* ========== 第2階層：サプタブ (商圏 / 行政) ========== */
+    /* ========== 第2階層：サブタブ (商圏 / 行政) ========== */
     .sub-tabs {
       display: flex;
       background: #e5e5ea;
@@ -98,7 +98,7 @@
       border-radius: 6px;
       background: #fafafa;
     }
-    
+
     /* リスト・アコーディオン */
     .list-group { margin-bottom: 10px; }
     .list-header {
@@ -132,12 +132,38 @@
       align-items: center;
       padding: 10px 0;
       border-bottom: 1px solid #eee;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
     .list-item:last-child { border-bottom: none; }
     .list-item input[type="checkbox"] {
       transform: scale(1.3);
       margin-right: 12px;
     }
+
+    /* 注目地点（長押しで設定） */
+    .list-item.focused {
+      background: #fff3e0;
+      border-left: 4px solid #ff9800;
+      padding-left: 6px;
+    }
+    .list-item.pressing {
+      box-shadow: inset 0 0 0 3px #ff9800;
+      background: #fff8e1;
+      padding-left: 6px;
+      padding-right: 6px;
+    }
+    th.focus-col, td.focus-col { background: #ffe0b2 !important; }
+    .focus-bar {
+      background: #fff8f0;
+      border: 1px solid #ffcc80;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 15px;
+      font-size: 0.9rem;
+    }
+    .focus-bar .hint { color: #888; font-size: 0.8rem; margin-top: 4px; }
 
     /* ボタン類 */
     .search-btn {
@@ -162,6 +188,22 @@
       margin-left: 10px;
       cursor: pointer;
     }
+    .photo-open-btn {
+      width: 100%;
+      padding: 12px;
+      margin-top: 10px;
+      background: #ff9800;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .photo-open-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+    /* 街フォトへのリンク */
+    .photo-link { color: #007aff; text-decoration: underline; }
 
     /* テーブル */
     .result-wrapper {
@@ -212,8 +254,6 @@
       text-align: right;
       font-size: 1rem;
     }
-    .photo-link { color: #007aff; text-decoration: underline; }
-.photo-icon { margin-left: auto; padding: 4px 10px; text-decoration: none; font-size: 1.1rem; }
   </style>
 </head>
 <body>
@@ -232,24 +272,28 @@
 </nav>
 
 <script>
+  // ==========================================
+  // 街フォト連携用ヘルパー
+  // ==========================================
   const PHOTO_SITE_URL = 'https://machi-photo.com/';
 
-function escapeHtml(s) {
-  return String(s).replace(/[&'`"<>]/g, c => ({ '&':'&amp;', "'":'&#x27;', '`':'&#x60;', '"':'&quot;', '<':'&lt;', '>':'&gt;' }[c]));
-}
-function photoUrl(query) {
-  const q = String(query).replace(/駅$/, '').trim();
-  return `${PHOTO_SITE_URL}?q=${encodeURIComponent(q)}`;
-}
-function photoLink(label, query = label) {
-  return `<a class="photo-link" href="${photoUrl(query)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
-}
-function photoIcon(query) {
-  return `<a class="photo-icon" href="${photoUrl(query)}" target="_blank" rel="noopener" aria-label="${escapeHtml(query)}の写真を見る">📷</a>`;
-}
-function adminSearchName(name) {
-  return name.replace(/^[^\s]{2,3}[都道府県]/, '') || name;
-}
+  function escapeHtml(s) {
+    return String(s).replace(/[&'`"<>]/g, c => ({ '&':'&amp;', "'":'&#x27;', '`':'&#x60;', '"':'&quot;', '<':'&lt;', '>':'&gt;' }[c]));
+  }
+  // 検索語から街フォトのURLを作る（末尾の「駅」は外す）
+  function photoUrl(query) {
+    const q = String(query).replace(/駅$/, '').trim();
+    return `${PHOTO_SITE_URL}?q=${encodeURIComponent(q)}`;
+  }
+  // 名前そのものを街フォトへのリンクにする（結果表で使用）
+  function photoLink(label, query = label) {
+    return `<a class="photo-link" href="${photoUrl(query)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+  }
+  // 行政区名から都道府県部分を除く（「北海道札幌市」→「札幌市」）
+  function adminSearchName(name) {
+    return name.replace(/^[^\s]{2,3}[都道府県]/, '') || name;
+  }
+
   // 全国合計値の設定（計算基準用）
   const NATIONAL_TOTALS_ADMIN = {
     "人口": 126146099, "昼間人口": 126146099, "GRP": 5740408.00,
@@ -282,7 +326,7 @@ function adminSearchName(name) {
     URL_SUBWAY_DATA: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWIvVKpVGibqTl0uL0cv4IfZVEPxEiiSbakzEVLGGcO2kjvp3Uyc_K5f_h6K-VzeVfkQFSb1z9jdJM/pub?gid=0&single=true&output=csv',
     URL_SUBWAY_RANKING: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQWIvVKpVGibqTl0uL0cv4IfZVEPxEiiSbakzEVLGGcO2kjvp3Uyc_K5f_h6K-VzeVfkQFSb1z9jdJM/pub?gid=1551612660&single=true&output=csv',
     URL_ADMIN: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT0aD_hVGXuEgScPe4fdO0SinUYsPwog2CLiefIdZosotReUGLWpiKx8Dw3upfTD-sherpYef-GV9Sy/pub?gid=335081747&single=true&output=csv',
-    
+
     dataSubway: { rows: [], headers: [] },
     rankingSubway: { rows: [], headers: [] },
     dataAdmin: { rows: [], headers: [] },
@@ -298,12 +342,12 @@ function adminSearchName(name) {
         this.dataSubway = this.parseCSV(await resSubData.text());
         this.rankingSubway = this.parseCSV(await resSubRank.text());
         this.dataAdmin = this.parseCSV(await resAdmin.text());
-        
+
         document.getElementById('bottom-nav').style.display = 'flex';
         this.setupBottomNav();
-        this.switchMainView('data'); 
+        this.switchMainView('data');
       } catch (e) {
-        document.getElementById('view-area').innerHTML = `<div style="color:red;text-align:center;padding:20px;">読み込みに失敗しました。<br>${e.message}</div>`;
+        document.getElementById('view-area').innerHTML = `<div style="color:red;text-align:center;padding:20px;">読み込みに失敗しました。<br>${escapeHtml(e.message)}</div>`;
       }
     },
 
@@ -314,7 +358,7 @@ function adminSearchName(name) {
       for (let i = 0; i < text.length; i++) {
         const c = text[i], nextC = text[i + 1];
         if (c === '"') {
-          if (inQuotes && nextC === '"') { cell += '"'; i++; } 
+          if (inQuotes && nextC === '"') { cell += '"'; i++; }
           else { inQuotes = !inQuotes; }
         } else if (c === ',' && !inQuotes) {
           row.push(cell.trim()); cell = '';
@@ -322,7 +366,7 @@ function adminSearchName(name) {
           row.push(cell.trim());
           if (row.length > 0 && !(row.length === 1 && row[0] === '')) result.push(row);
           row = []; cell = '';
-          if (c === '\r') i++; 
+          if (c === '\r') i++;
         } else { cell += c; }
       }
       if (cell !== '' || row.length > 0) {
@@ -349,13 +393,13 @@ function adminSearchName(name) {
       if (viewName === 'data') {
         DataView.render(viewArea, this.dataSubway, this.dataAdmin);
       } else if (viewName === 'ranking') {
-        RankingView.render(viewArea, this.rankingSubway, this.dataAdmin); 
+        RankingView.render(viewArea, this.rankingSubway, this.dataAdmin);
       } else if (viewName === 'weighting') {
         WeightingView.render(viewArea, this.rankingSubway, this.dataAdmin);
       } else if (viewName === 'other') {
         OtherView.render(viewArea);
       } else {
-        viewArea.innerHTML = `<div style="text-align:center; padding:40px;">「${viewName}」は準備中です</div>`;
+        viewArea.innerHTML = `<div style="text-align:center; padding:40px;">「${escapeHtml(viewName)}」は準備中です</div>`;
       }
     }
   };
@@ -364,20 +408,110 @@ function adminSearchName(name) {
   // 2. データ検索ビュー (DataView)
   // ==========================================
   const DataView = {
-    currentMode: '商圏', 
+    currentMode: '商圏',
     treeSubway: {}, treeAdmin: {},
     citiesSubway: [], prefsAdmin: [],
     selectedSubway: new Set(), selectedAdmin: new Set(),
 
+    // 注目地点（長押しで設定）: { mode: '商圏' | '行政', key: 駅のrawName または 行政のindex文字列 }
+    focus: null,
+
+    // ---------- 注目地点まわり ----------
+    isFocus(mode, key) {
+      return !!this.focus && this.focus.mode === mode && this.focus.key === key;
+    },
+
+    setFocus(mode, key) {
+      const set = mode === '商圏' ? this.selectedSubway : this.selectedAdmin;
+      if (this.isFocus(mode, key)) {
+        this.focus = null;        // 同じ地名の長押し → 注目を解除（チェックは残す）
+      } else {
+        this.focus = { mode, key };
+        set.add(key);             // 注目地点は必ずチェック済みにする
+      }
+      this.refreshFocusUI();
+    },
+
+    focusInfo() {
+      if (!this.focus) return null;
+      if (this.focus.mode === '商圏') {
+        const n = this.focus.key.replace(/-0\.5km$/, '');
+        return { label: n, query: n };
+      }
+      const row = this.rawAdmin.rows[parseInt(this.focus.key, 10)];
+      if (!row) return null;
+      return { label: adminSearchName(row[0]), query: adminSearchName(row[0]) };
+    },
+
+    refreshFocusUI() {
+      const set = this.currentMode === '商圏' ? this.selectedSubway : this.selectedAdmin;
+      document.querySelectorAll('.list-item[data-key]').forEach(el => {
+        el.classList.toggle('focused', this.isFocus(this.currentMode, el.dataset.key));
+        el.querySelector('input').checked = set.has(el.dataset.key);
+      });
+      const cnt = document.getElementById('selected-count');
+      if (cnt) cnt.textContent = set.size;
+
+      const info = this.focusInfo();
+      const label = document.getElementById('focus-label');
+      const btn = document.getElementById('photo-open-btn');
+      if (label) label.textContent = info ? info.label : 'なし';
+      if (btn) btn.disabled = !info;
+    },
+
+    // 長押し検出（1秒）。押している間は太枠を表示し、スクロールしたら取り消す
+    attachLongPress(el, onLongPress) {
+      const LONG_PRESS_MS = 1000;  // 長押しの時間
+      const SHOW_FRAME_MS = 150;   // 太枠を出すまでの待ち時間（普通のタップで枠がちらつくのを防ぐ）
+      let timer = null, frameTimer = null, fired = false, suppress = false, sx = 0, sy = 0;
+
+      const cancel = () => {
+        clearTimeout(timer); clearTimeout(frameTimer);
+        timer = null; frameTimer = null;
+        el.classList.remove('pressing');
+      };
+      const end = () => {
+        cancel();
+        if (fired) {
+          fired = false;
+          suppress = true;                       // 長押し直後のclickを無効化
+          setTimeout(() => { suppress = false; }, 350);
+        }
+      };
+
+      el.addEventListener('pointerdown', e => {
+        sx = e.clientX; sy = e.clientY; fired = false;
+        frameTimer = setTimeout(() => el.classList.add('pressing'), SHOW_FRAME_MS);
+        timer = setTimeout(() => {
+          timer = null; fired = true;
+          el.classList.remove('pressing');
+          if (navigator.vibrate) navigator.vibrate(30);
+          onLongPress();
+        }, LONG_PRESS_MS);
+      });
+      el.addEventListener('pointermove', e => {
+        if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) cancel();
+      });
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+      el.addEventListener('pointerleave', end);
+      el.addEventListener('contextmenu', e => e.preventDefault());
+      // 長押し直後の click（チェック切り替え）を打ち消す
+      el.addEventListener('click', e => {
+        if (suppress) { e.preventDefault(); e.stopPropagation(); }
+      }, true);
+    },
+
+    // ---------- 画面 ----------
     render(container, dataSubway, dataAdmin) {
       this.rawSubway = dataSubway; this.rawAdmin = dataAdmin;
       this.buildSubwayTree(dataSubway.rows);
       this.buildAdminTree(dataAdmin.rows);
-      
+
       container.innerHTML = `
         <div class="sub-tabs" id="sub-tabs">
-          <div class="sub-tab active" data-mode="商圏">商圏データ</div>
-          <div class="sub-tab" data-mode="行政">行政区データ</div>
+          <div class="sub-tab ${this.currentMode === '商圏' ? 'active' : ''}" data-mode="商圏">商圏データ</div>
+          <div class="sub-tab ${this.currentMode === '行政' ? 'active' : ''}" data-mode="行政">行政区データ</div>
         </div>
         <div id="search-form-area"></div>
         <div id="result-area" class="result-wrapper"></div>
@@ -386,7 +520,7 @@ function adminSearchName(name) {
       const tabs = container.querySelectorAll('.sub-tab');
       tabs.forEach(tab => {
         tab.addEventListener('click', (e) => {
-          if(this.currentMode === e.currentTarget.dataset.mode) return;
+          if (this.currentMode === e.currentTarget.dataset.mode) return;
           tabs.forEach(t => t.classList.remove('active'));
           e.currentTarget.classList.add('active');
           this.currentMode = e.currentTarget.dataset.mode;
@@ -426,7 +560,7 @@ function adminSearchName(name) {
         const fullLocation = row[0];
         if (!fullLocation) return;
         let pref = 'その他', city = fullLocation;
-        const prefEndIndex = Math.max(fullLocation.indexOf('東京都'), fullLocation.indexOf('北海道'), fullLocation.indexOf('大阪府'), fullLocation.indexOf('京都府'),fullLocation.indexOf('県'));
+        const prefEndIndex = Math.max(fullLocation.indexOf('東京都'), fullLocation.indexOf('北海道'), fullLocation.indexOf('大阪府'), fullLocation.indexOf('京都府'), fullLocation.indexOf('県'));
         if (prefEndIndex > 0 && prefEndIndex < 4) {
           pref = fullLocation.substring(0, prefEndIndex + 1);
           city = fullLocation.substring(prefEndIndex + 1) || '全体';
@@ -465,15 +599,21 @@ function adminSearchName(name) {
           </div>
         `;
       }
-      
+
       html += `
+        <div class="focus-bar">
+          🟠 注目地点: <strong id="focus-label">なし</strong>
+          <button class="clear-btn" id="focus-clear-btn">解除</button>
+          <div class="hint">地名を1秒長押しすると注目地点に設定できます</div>
+          <button class="photo-open-btn" id="photo-open-btn" disabled>📷 街フォトで見る</button>
+        </div>
         <div style="text-align:center; margin-bottom:15px; font-size:0.95rem;">
           選択中: <strong id="selected-count" style="color:#007aff; font-size:1.1rem;">${count}</strong> 件
           <button class="clear-btn" id="clear-btn">クリア</button>
         </div>
         <button class="search-btn" id="search-btn">比較表を作成する</button>
       `;
-      
+
       formArea.innerHTML = html;
 
       const selectBox = document.getElementById('select-target');
@@ -496,12 +636,29 @@ function adminSearchName(name) {
       }
 
       document.getElementById('search-btn').addEventListener('click', () => this.renderResults());
+
+      // クリア: チェックと注目地点をすべて解除
       document.getElementById('clear-btn').addEventListener('click', () => {
         if (this.currentMode === '商圏') this.selectedSubway.clear();
         else this.selectedAdmin.clear();
-        this.renderForm(); 
-        document.getElementById('result-area').innerHTML = ''; 
+        if (this.focus && this.focus.mode === this.currentMode) this.focus = null;
+        this.renderForm();
+        document.getElementById('result-area').innerHTML = '';
       });
+
+      // 注目地点だけ解除（チェックは残す）
+      document.getElementById('focus-clear-btn').addEventListener('click', () => {
+        this.focus = null;
+        this.refreshFocusUI();
+      });
+
+      // 街フォトで注目地点を検索
+      document.getElementById('photo-open-btn').addEventListener('click', () => {
+        const info = this.focusInfo();
+        if (info) window.open(photoUrl(info.query), '_blank', 'noopener');
+      });
+
+      this.refreshFocusUI();
     },
 
     renderSubwayList(city) {
@@ -513,23 +670,31 @@ function adminSearchName(name) {
         group.className = 'list-group';
         const header = document.createElement('div');
         header.className = 'list-header';
-        header.innerHTML = `<span>${line}</span><span class="toggle-icon">▼</span>`;
+        header.innerHTML = `<span>${escapeHtml(line)}</span><span class="toggle-icon">▼</span>`;
         const listContainer = document.createElement('div');
         listContainer.className = 'list-container';
-        
+
         this.treeSubway[city][line].forEach(st => {
           const isChecked = this.selectedSubway.has(st.rawName);
           const item = document.createElement('label');
           item.className = 'list-item';
-          item.innerHTML = `<input type="checkbox" value="${st.rawName}" ${isChecked ? 'checked' : ''}> <span style="flex:1">${st.cleanName}</span>${photoIcon(st.cleanName)}`;
+          item.dataset.key = st.rawName;
+          item.innerHTML = `<input type="checkbox" ${isChecked ? 'checked' : ''}> ${escapeHtml(st.cleanName)}`;
+          if (this.isFocus('商圏', st.rawName)) item.classList.add('focused');
+
           item.querySelector('input').addEventListener('change', (e) => {
-            if (e.target.checked) this.selectedSubway.add(st.rawName);
-            else this.selectedSubway.delete(st.rawName);
-            document.getElementById('selected-count').textContent = this.selectedSubway.size;
+            if (e.target.checked) {
+              this.selectedSubway.add(st.rawName);
+            } else {
+              this.selectedSubway.delete(st.rawName);
+              if (this.isFocus('商圏', st.rawName)) this.focus = null;  // チェックを外したら注目も解除
+            }
+            this.refreshFocusUI();
           });
+          this.attachLongPress(item, () => this.setFocus('商圏', st.rawName));
           listContainer.appendChild(item);
         });
-        
+
         header.addEventListener('click', () => {
           listContainer.classList.toggle('open');
           header.classList.toggle('open');
@@ -550,21 +715,29 @@ function adminSearchName(name) {
       header.innerHTML = `<span>市区町村一覧</span><span class="toggle-icon">▼</span>`;
       const listContainer = document.createElement('div');
       listContainer.className = 'list-container';
-      
+
       this.treeAdmin[pref].forEach(cityObj => {
         const val = cityObj.index.toString();
         const isChecked = this.selectedAdmin.has(val);
         const item = document.createElement('label');
         item.className = 'list-item';
-        item.innerHTML = `<input type="checkbox" value="${val}" ${isChecked ? 'checked' : ''}> <span style="flex:1">${cityObj.cleanName}</span>${photoIcon(cityObj.cleanName)}`;
+        item.dataset.key = val;
+        item.innerHTML = `<input type="checkbox" ${isChecked ? 'checked' : ''}> ${escapeHtml(cityObj.cleanName)}`;
+        if (this.isFocus('行政', val)) item.classList.add('focused');
+
         item.querySelector('input').addEventListener('change', (e) => {
-          if (e.target.checked) this.selectedAdmin.add(val);
-          else this.selectedAdmin.delete(val);
-          document.getElementById('selected-count').textContent = this.selectedAdmin.size;
+          if (e.target.checked) {
+            this.selectedAdmin.add(val);
+          } else {
+            this.selectedAdmin.delete(val);
+            if (this.isFocus('行政', val)) this.focus = null;  // チェックを外したら注目も解除
+          }
+          this.refreshFocusUI();
         });
+        this.attachLongPress(item, () => this.setFocus('行政', val));
         listContainer.appendChild(item);
       });
-      
+
       header.addEventListener('click', () => {
         listContainer.classList.toggle('open');
         header.classList.toggle('open');
@@ -582,26 +755,34 @@ function adminSearchName(name) {
       }
       let selectedData = [], headers = [], startCol = 0;
       if (this.currentMode === '商圏') {
-        headers = this.rawSubway.headers; startCol = 3; 
+        headers = this.rawSubway.headers; startCol = 3;
         selectedValues.forEach(val => {
           const rowData = this.rawSubway.rows.find(r => r[0] === val);
-          if (rowData) selectedData.push({ cleanName: val.replace(/-0\.5km$/, ''), rowData });
+          if (rowData) selectedData.push({ key: val, cleanName: val.replace(/-0\.5km$/, ''), rowData });
         });
       } else {
-        headers = this.rawAdmin.headers; startCol = 2; 
+        headers = this.rawAdmin.headers; startCol = 2;
         selectedValues.forEach(indexStr => {
           const rowData = this.rawAdmin.rows[parseInt(indexStr, 10)];
+          if (!rowData) return;
           const cleanName = rowData[0].replace(/^[^\s]{2,3}[都道府県]/, '') || rowData[0];
-          if (rowData) selectedData.push({ cleanName, rowData });
+          selectedData.push({ key: indexStr, cleanName, rowData });
         });
       }
+
+      const isF = item => this.isFocus(this.currentMode, item.key);
+
       let html = '<table><thead><tr><th class="header-item">項目</th>';
-     selectedData.forEach(item => html += `<th class="header-target">${photoLink(item.cleanName)}</th>`);
+      selectedData.forEach(item => {
+        html += `<th class="header-target${isF(item) ? ' focus-col' : ''}">${photoLink(item.cleanName)}</th>`;
+      });
       html += '</tr></thead><tbody>';
       for (let i = startCol; i < headers.length; i++) {
         if (!headers[i]) continue;
-        html += `<tr><th class="header-item">${headers[i]}</th>`;
-        selectedData.forEach(item => html += `<td>${item.rowData[i] || '-'}</td>`);
+        html += `<tr><th class="header-item">${escapeHtml(headers[i])}</th>`;
+        selectedData.forEach(item => {
+          html += `<td${isF(item) ? ' class="focus-col"' : ''}>${escapeHtml(item.rowData[i] || '-')}</td>`;
+        });
         html += '</tr>';
       }
       html += '</tbody></table>';
@@ -620,8 +801,8 @@ function adminSearchName(name) {
       this.rankingSubway = rankingSubway; this.dataAdmin = dataAdmin;
       container.innerHTML = `
         <div class="sub-tabs">
-          <div class="sub-tab active" data-mode="商圏">商圏ランキング</div>
-          <div class="sub-tab" data-mode="行政">行政区ランキング</div>
+          <div class="sub-tab ${this.currentMode === '商圏' ? 'active' : ''}" data-mode="商圏">商圏ランキング</div>
+          <div class="sub-tab ${this.currentMode === '行政' ? 'active' : ''}" data-mode="行政">行政区ランキング</div>
         </div>
         <div id="ranking-form-area"></div>
         <div id="ranking-result-area"></div>
@@ -629,11 +810,11 @@ function adminSearchName(name) {
       const tabs = container.querySelectorAll('.sub-tab');
       tabs.forEach(tab => {
         tab.addEventListener('click', (e) => {
-          if(this.currentMode === e.currentTarget.dataset.mode) return;
+          if (this.currentMode === e.currentTarget.dataset.mode) return;
           tabs.forEach(t => t.classList.remove('active'));
           e.currentTarget.classList.add('active');
           this.currentMode = e.currentTarget.dataset.mode;
-          document.getElementById('ranking-result-area').innerHTML = ''; 
+          document.getElementById('ranking-result-area').innerHTML = '';
           this.renderForm();
         });
       });
@@ -652,7 +833,7 @@ function adminSearchName(name) {
         `;
         const selectBox = document.getElementById('ranking-category-select');
         for (let i = 1; i < this.rankingSubway.headers.length; i++) {
-          if (this.rankingSubway.headers[i]) selectBox.innerHTML += `<option value="${i}">${this.rankingSubway.headers[i]}</option>`;
+          if (this.rankingSubway.headers[i]) selectBox.innerHTML += `<option value="${i}">${escapeHtml(this.rankingSubway.headers[i])}</option>`;
         }
         document.getElementById('calc-ranking-btn').addEventListener('click', () => this.calcSubwayRanking());
       } else {
@@ -674,7 +855,7 @@ function adminSearchName(name) {
         `;
         const selectBox = document.getElementById('ranking-category-select');
         for (let i = 2; i < this.dataAdmin.headers.length; i++) {
-          if (this.dataAdmin.headers[i]) selectBox.innerHTML += `<option value="${i}">${this.dataAdmin.headers[i]}</option>`;
+          if (this.dataAdmin.headers[i]) selectBox.innerHTML += `<option value="${i}">${escapeHtml(this.dataAdmin.headers[i])}</option>`;
         }
         document.getElementById('calc-ranking-btn').addEventListener('click', () => this.calcAdminRanking());
       }
@@ -684,13 +865,13 @@ function adminSearchName(name) {
       const selectBox = document.getElementById('ranking-category-select');
       const targetColIndex = parseInt(selectBox.value, 10);
       const colName = this.rankingSubway.headers[targetColIndex];
-      let list = [...this.rankingSubway.rows].filter(r => r[0]); 
+      let list = [...this.rankingSubway.rows].filter(r => r[0]);
       list.sort((a, b) => {
         const valA = parseFloat((a[targetColIndex] || '0').replace(/,/g, '')) || 0;
         const valB = parseFloat((b[targetColIndex] || '0').replace(/,/g, '')) || 0;
-        return valB - valA; 
+        return valB - valA;
       });
-      this.renderTable(colName, list.slice(0, 50), targetColIndex, 0); 
+      this.renderTable(colName, list.slice(0, 50), targetColIndex, 0);
     },
 
     calcAdminRanking() {
@@ -719,15 +900,15 @@ function adminSearchName(name) {
       list.sort((a, b) => {
         const valA = parseFloat((a[targetColIndex] || '0').replace(/,/g, '')) || 0;
         const valB = parseFloat((b[targetColIndex] || '0').replace(/,/g, '')) || 0;
-        return valB - valA; 
+        return valB - valA;
       });
-      this.renderTable(colName, list.slice(0, 50), targetColIndex, 0); 
+      this.renderTable(colName, list.slice(0, 50), targetColIndex, 0);
     },
 
     renderTable(colName, dataList, valueColIndex, nameColIndex) {
       let html = `
         <div class="step-card">
-          <h3 style="margin-top:0; border-bottom:2px solid #007aff; padding-bottom:5px;">${colName} ランキング (上位50件)</h3>
+          <h3 style="margin-top:0; border-bottom:2px solid #007aff; padding-bottom:5px;">${escapeHtml(colName)} ランキング (上位50件)</h3>
           <table style="width:100%; border-collapse: collapse; margin-top:10px; font-size:0.9rem;">
             <thead>
               <tr>
@@ -741,12 +922,12 @@ function adminSearchName(name) {
       if (dataList.length === 0) html += '<tr><td colspan="3" style="text-align:center; padding: 15px;">該当するデータがありません</td></tr>';
       dataList.forEach((row, index) => {
         const raw = row[nameColIndex];
-const label = this.currentMode === '商圏' ? raw.replace(/-0\.5km$/, '') : raw;
-const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
+        const label = this.currentMode === '商圏' ? raw.replace(/-0\.5km$/, '') : raw;
+        const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
         html += `<tr>
             <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:center; font-weight:bold;">${index + 1}</td>
             <td style="padding:10px 8px; border-bottom:1px solid #eee;">${photoLink(label, query)}</td>
-            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right;">${row[valueColIndex] || '-'}</td>
+            <td style="padding:10px 8px; border-bottom:1px solid #eee; text-align:right;">${escapeHtml(row[valueColIndex] || '-')}</td>
           </tr>`;
       });
       html += `</tbody></table></div>`;
@@ -759,19 +940,19 @@ const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
   // ==========================================
   const WeightingView = {
     currentMode: '商圏',
-    JAPAN_POPULATION: 126146099, 
+    JAPAN_POPULATION: 126146099,
     citiesSubway: [],
     prefsAdmin: [],
 
     render(container, rankingSubway, dataAdmin) {
-      this.rankingSubway = rankingSubway; 
+      this.rankingSubway = rankingSubway;
       this.dataAdmin = dataAdmin;
       this.buildSelections();
-      
+
       container.innerHTML = `
         <div class="sub-tabs">
-          <div class="sub-tab active" data-mode="商圏">商圏スコアリング</div>
-          <div class="sub-tab" data-mode="行政">行政区スコアリング</div>
+          <div class="sub-tab ${this.currentMode === '商圏' ? 'active' : ''}" data-mode="商圏">商圏スコアリング</div>
+          <div class="sub-tab ${this.currentMode === '行政' ? 'active' : ''}" data-mode="行政">行政区スコアリング</div>
         </div>
         <div class="step-card" style="margin-bottom:10px;">
           <p style="font-size:0.85rem; color:#555; margin:0;">
@@ -785,11 +966,11 @@ const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
       const tabs = container.querySelectorAll('.sub-tab');
       tabs.forEach(tab => {
         tab.addEventListener('click', (e) => {
-          if(this.currentMode === e.currentTarget.dataset.mode) return;
+          if (this.currentMode === e.currentTarget.dataset.mode) return;
           tabs.forEach(t => t.classList.remove('active'));
           e.currentTarget.classList.add('active');
           this.currentMode = e.currentTarget.dataset.mode;
-          document.getElementById('weighting-result-area').innerHTML = ''; 
+          document.getElementById('weighting-result-area').innerHTML = '';
           this.renderForm();
         });
       });
@@ -841,7 +1022,7 @@ const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
             <div class="step-title">1. 対象の都市を選ぶ</div>
             <select id="weighting-target-select">
               <option value="全国">全国 (すべて)</option>
-              ${this.citiesSubway.map(c => `<option value="${c}">${c}</option>`).join('')}
+              ${this.citiesSubway.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
             </select>
           </div>
         `;
@@ -860,7 +1041,7 @@ const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
             <div class="step-title">2. 対象の都道府県を選ぶ</div>
             <select id="weighting-target-select">
               <option value="全国">全国 (すべて)</option>
-              ${this.prefsAdmin.map(p => `<option value="${p}">${p}</option>`).join('')}
+              ${this.prefsAdmin.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('')}
             </select>
           </div>
         `;
@@ -871,7 +1052,7 @@ const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
         if (!data.headers[i]) continue;
         html += `
           <div class="weight-item">
-            <div class="weight-label">${data.headers[i]}</div>
+            <div class="weight-label">${escapeHtml(data.headers[i])}</div>
             <input type="number" min="0" max="100" class="weight-input" data-col="${i}" placeholder="0">
           </div>
         `;
@@ -884,7 +1065,7 @@ const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
     calculateScore() {
       const data = this.currentMode === '商圏' ? this.rankingSubway : this.dataAdmin;
       const nationalTotals = this.currentMode === '商圏' ? NATIONAL_TOTALS_SUBWAY : NATIONAL_TOTALS_ADMIN;
-      
+
       let weights = {};
       let totalWeight = 0;
       document.querySelectorAll('.weight-input').forEach(input => {
@@ -923,8 +1104,8 @@ const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
       }
 
       let results = [];
-      const nameColIndex = 0; 
-      
+      const nameColIndex = 0;
+
       data.rows.forEach(row => {
         const name = row[nameColIndex];
         if (!name) return;
@@ -950,7 +1131,7 @@ const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
           else if (name.endsWith('町')) type = 'town';
           else if (name.endsWith('村')) type = 'village';
           else type = 'other';
-          
+
           if (!checkedTypes.includes(type)) return; // 区分フィルタ除外
 
           if (targetArea !== '全国') {
@@ -969,13 +1150,13 @@ const query = this.currentMode === '商圏' ? label : adminSearchName(raw);
             rawScore += (val / colSums[col]) * weights[col];
           }
         }
-        
+
         let adjustedScore = rawScore * (this.JAPAN_POPULATION / totalWeight);
         let cleanName = name;
         if (this.currentMode === '商圏') cleanName = cleanName.replace(/-0\.5km$/, '');
-        
+
         const query = this.currentMode === '商圏' ? cleanName : adminSearchName(name);
-results.push({ name: cleanName, query, score: Math.round(adjustedScore) });
+        results.push({ name: cleanName, query, score: Math.round(adjustedScore) });
       });
 
       results.sort((a, b) => b.score - a.score);
@@ -1009,7 +1190,7 @@ results.push({ name: cleanName, query, score: Math.round(adjustedScore) });
         });
       }
       html += `</tbody></table></div>`;
-      
+
       const resultArea = document.getElementById('weighting-result-area');
       resultArea.innerHTML = html;
       resultArea.scrollIntoView({ behavior: 'smooth' });
@@ -1017,7 +1198,7 @@ results.push({ name: cleanName, query, score: Math.round(adjustedScore) });
   };
 
   // ==========================================
-  // 5. その他ビュー (OtherView) - 新規追加
+  // 5. その他ビュー (OtherView)
   // ==========================================
   const OtherView = {
     render(container) {
